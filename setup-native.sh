@@ -488,6 +488,9 @@ public class MayaControls {
                 case "CREATE_ALARM": return alarm(ctx, a.optInt("hour", -1), a.optInt("minute", -1), a.optString("label", "Maya alarm"));
                 case "START_TIMER": return timer(ctx, a.optInt("seconds", 0), a.optString("label", "Maya timer"));
                 case "NUDGE_SET": return MayaNudge.set(ctx, act, a);
+                case "AUTOMATION_STATUS": case "BATTERY_ALERT_SET":
+                case "REMINDER_SET": case "REMINDER_CANCEL": case "REMINDER_LIST":
+                case "NOTIFICATION_PERMISSION_REQUEST": return MayaAutomations.run(ctx, act, action, a);
                 default: return res("error", "Unknown action.");
             }
         } catch (Exception e) {
@@ -906,6 +909,221 @@ if 'storeFile file("../../maya-debug.keystore")' not in s:
     s=s.replace(marker, signing, 1)
     p.write_text(s)
 PYGRADLE
+fi
+
+
+# ------------------------------------------------------ V2 native automations
+cat > "$APP_DIR/MayaAutomations.java" <<'EOF_V2_AUTOMATIONS'
+package com.tanim.maya;
+
+import android.Manifest;
+import android.app.Activity;
+import android.app.AlarmManager;
+import android.app.Notification;
+import android.app.NotificationChannel;
+import android.app.NotificationManager;
+import android.app.PendingIntent;
+import android.content.BroadcastReceiver;
+import android.content.Context;
+import android.content.Intent;
+import android.content.SharedPreferences;
+import android.content.pm.PackageManager;
+import android.os.BatteryManager;
+import android.os.Build;
+import android.os.SystemClock;
+import org.json.JSONArray;
+import org.json.JSONObject;
+import java.util.Map;
+import java.util.UUID;
+
+/** V2 device-local reminders and opt-in battery alerts; no always-on microphone. */
+public class MayaAutomations extends BroadcastReceiver {
+    private static final String PREF = "maya_automation_v2";
+    private static final String CHANNEL = "maya_automation_v2";
+    private static final String PULSE = "com.tanim.maya.PULSE";
+    private static final String REMINDER = "com.tanim.maya.REMINDER";
+    private static final long PERIOD = 45L * 60 * 1000; // inexact under Doze; not a live monitor
+    private static SharedPreferences prefs(Context c) { return c.getSharedPreferences(PREF, Context.MODE_PRIVATE); }
+
+    private static PendingIntent pulseIntent(Context c) {
+        Intent i = new Intent(c, MayaAutomations.class).setAction(PULSE);
+        return PendingIntent.getBroadcast(c, 7461, i, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+    }
+    private static PendingIntent reminderIntent(Context c, String id) {
+        Intent i = new Intent(c, MayaAutomations.class).setAction(REMINDER).putExtra("id", id);
+        return PendingIntent.getBroadcast(c, id.hashCode(), i, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+    }
+    private static void schedulePulse(Context c) {
+        AlarmManager a = (AlarmManager)c.getSystemService(Context.ALARM_SERVICE);
+        if (a == null) return;
+        a.cancel(pulseIntent(c));
+        if (!prefs(c).getBoolean("battery", false)) return;
+        if (Build.VERSION.SDK_INT >= 23) a.setAndAllowWhileIdle(AlarmManager.ELAPSED_REALTIME_WAKEUP, SystemClock.elapsedRealtime()+PERIOD, pulseIntent(c));
+        else a.set(AlarmManager.ELAPSED_REALTIME_WAKEUP, SystemClock.elapsedRealtime()+PERIOD, pulseIntent(c));
+    }
+    private static void scheduleReminder(Context c, String id, long millis) {
+        AlarmManager a = (AlarmManager)c.getSystemService(Context.ALARM_SERVICE);
+        if (a == null) return;
+        PendingIntent p = reminderIntent(c, id);
+        a.cancel(p);
+        if (Build.VERSION.SDK_INT >= 23) a.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, millis, p);
+        else a.set(AlarmManager.RTC_WAKEUP, millis, p);
+    }
+    private static void cancelReminder(Context c, String id) {
+        AlarmManager a=(AlarmManager)c.getSystemService(Context.ALARM_SERVICE);
+        if (a != null) a.cancel(reminderIntent(c,id));
+    }
+    static boolean notificationAllowed(Context c) {
+        return Build.VERSION.SDK_INT < 33 || c.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)==PackageManager.PERMISSION_GRANTED;
+    }
+    static void askNotifications(final Activity act) {
+        if (Build.VERSION.SDK_INT>=33 && act!=null && !notificationAllowed(act)) {
+            act.runOnUiThread(new Runnable(){ public void run(){ act.requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS},7733); }});
+        }
+    }
+    private static void alert(Context c,String title,String message,int id) {
+        if (!notificationAllowed(c)) return;
+        NotificationManager n=(NotificationManager)c.getSystemService(Context.NOTIFICATION_SERVICE);
+        if (n==null) return;
+        if (Build.VERSION.SDK_INT>=26) n.createNotificationChannel(new NotificationChannel(CHANNEL,"Maya reminders and battery", NotificationManager.IMPORTANCE_DEFAULT));
+        Intent launch=c.getPackageManager().getLaunchIntentForPackage(c.getPackageName());
+        if (launch==null) return;
+        launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_CLEAR_TOP);
+        PendingIntent content=PendingIntent.getActivity(c,id,launch,PendingIntent.FLAG_UPDATE_CURRENT|PendingIntent.FLAG_IMMUTABLE);
+        Notification.Builder b=Build.VERSION.SDK_INT>=26?new Notification.Builder(c,CHANNEL):new Notification.Builder(c);
+        b.setSmallIcon(c.getApplicationInfo().icon).setContentTitle(title).setContentText(message).setAutoCancel(true).setContentIntent(content);
+        n.notify(id,b.build());
+    }
+    private static int charge(Context c) {
+        Intent bat = c.registerReceiver(null, new android.content.IntentFilter(Intent.ACTION_BATTERY_CHANGED));
+        if (bat == null) return -1;
+        int level=bat.getIntExtra(BatteryManager.EXTRA_LEVEL,-1), scale=bat.getIntExtra(BatteryManager.EXTRA_SCALE,-1);
+        return level<0||scale<=0 ? -1 : Math.round(level*100f/scale);
+    }
+    private static boolean charging(Context c) {
+        Intent bat=c.registerReceiver(null,new android.content.IntentFilter(Intent.ACTION_BATTERY_CHANGED));
+        if (bat==null) return false;
+        int s=bat.getIntExtra(BatteryManager.EXTRA_STATUS,-1);
+        return s==BatteryManager.BATTERY_STATUS_CHARGING || s==BatteryManager.BATTERY_STATUS_FULL;
+    }
+    private static void checkLow(Context c) {
+        SharedPreferences p=prefs(c);
+        if (!p.getBoolean("battery",false)) return;
+        int percent=charge(c), threshold=p.getInt("threshold",20);
+        if (percent<0) return;
+        if (charging(c)||percent>threshold+4) { p.edit().putBoolean("lowSent",false).apply(); return; }
+        if (percent<=threshold && !p.getBoolean("lowSent",false)) {
+            alert(c,"Maya · Battery low","Battery is " + percent + "%. Consider charging your phone.", 8741);
+            p.edit().putBoolean("lowSent",true).apply();
+        }
+    }
+    @Override public void onReceive(Context c, Intent intent) {
+        if(intent==null) return;
+        String action=intent.getAction();
+        if(Intent.ACTION_BOOT_COMPLETED.equals(action)) {
+            Map<String,?> all=prefs(c).getAll();
+            long now=System.currentTimeMillis();
+            for(Map.Entry<String,?> e:all.entrySet()) if(e.getKey().startsWith("rem:")) {
+                try { JSONObject r=new JSONObject(String.valueOf(e.getValue())); long t=r.getLong("at");
+                    if(t>now) scheduleReminder(c,r.getString("id"),t);
+                    else prefs(c).edit().remove(e.getKey()).apply();
+                } catch(Exception ignored) {}
+            }
+            schedulePulse(c); checkLow(c); return;
+        }
+        if(REMINDER.equals(action)) {
+            String id=intent.getStringExtra("id"); if(id==null) return;
+            String data=prefs(c).getString("rem:"+id,null);
+            if(data==null) return;
+            prefs(c).edit().remove("rem:"+id).apply();
+            try { JSONObject r=new JSONObject(data); alert(c,"Maya · Reminder",r.optString("title","Reminder"), id.hashCode()); } catch(Exception ignored) {}
+            return;
+        }
+        if(PULSE.equals(action)) { checkLow(c); schedulePulse(c); return; }
+        if(prefs(c).getBoolean("battery",false)) {
+            if(Intent.ACTION_POWER_CONNECTED.equals(action)) {
+                prefs(c).edit().putBoolean("lowSent",false).apply();
+                if(prefs(c).getBoolean("charging",false)) alert(c,"Maya · Charging","Your phone started charging.",8742);
+            } else if(Intent.ACTION_POWER_DISCONNECTED.equals(action)) {
+                if(prefs(c).getBoolean("charging",false)) alert(c,"Maya · Unplugged","Your phone stopped charging.",8743);
+            } else if(Intent.ACTION_BATTERY_LOW.equals(action)) checkLow(c);
+        }
+    }
+    static String run(Context c, Activity act, String action, JSONObject a) {
+        try {
+            SharedPreferences p=prefs(c);
+            switch(action) {
+                case "AUTOMATION_STATUS": {
+                    JSONObject o=new JSONObject();
+                    o.put("status","ok"); o.put("android",true);
+                    o.put("battery",p.getBoolean("battery",false));
+                    o.put("chargingAlerts",p.getBoolean("charging",false));
+                    o.put("threshold",p.getInt("threshold",20));
+                    o.put("batteryPercent",charge(c)); o.put("charging",charging(c));
+                    o.put("notificationsAllowed",notificationAllowed(c));
+                    o.put("reminders",list(c));
+                    return o.toString();
+                }
+                case "BATTERY_ALERT_SET": {
+                    boolean on=a.optBoolean("on",false); int threshold=a.optInt("threshold",20);
+                    if(threshold<10||threshold>50) return MayaControls.res("error","Choose a threshold between 10% and 50%.");
+                    p.edit().putBoolean("battery",on).putBoolean("charging",a.optBoolean("charging",false)).putInt("threshold",threshold).putBoolean("lowSent",false).apply();
+                    if(on) askNotifications(act);
+                    schedulePulse(c);
+                    return MayaControls.res("ok", on?"Battery alert configured; battery checks can be delayed by Android.":"Battery monitoring stopped.");
+                }
+                case "REMINDER_SET": {
+                    String title=a.optString("title","").trim();long at=a.optLong("at",0);
+                    if(title.isEmpty()||title.length()>120) return MayaControls.res("error","Reminder text must be 1–120 characters.");
+                    if(at<=System.currentTimeMillis()+10000L||at>System.currentTimeMillis()+366L*86400000L)
+                        return MayaControls.res("error","Choose a future time within one year.");
+                    if(list(c).length()>=32) return MayaControls.res("error","Maximum 32 reminders. Delete one first.");
+                    String id=UUID.randomUUID().toString().replace("-","").substring(0,14);
+                    JSONObject record=new JSONObject().put("id",id).put("title",title).put("at",at);
+                    p.edit().putString("rem:"+id,record.toString()).apply();
+                    scheduleReminder(c,id,at); askNotifications(act);
+                    return new JSONObject().put("status","scheduled").put("id",id).put("message","Reminder saved. Android may deliver it late while idle; notification permission is needed.").toString();
+                }
+                case "REMINDER_CANCEL": {
+                    String id=a.optString("id","");
+                    if(!p.contains("rem:"+id)) return MayaControls.res("error","Reminder not found.");
+                    cancelReminder(c,id);p.edit().remove("rem:"+id).apply();
+                    return MayaControls.res("ok","Reminder cancelled.");
+                }
+                case "REMINDER_LIST": return new JSONObject().put("status","ok").put("reminders",list(c)).toString();
+                case "NOTIFICATION_PERMISSION_REQUEST":
+                    askNotifications(act); return MayaControls.res("sent","If needed, Android will ask you to allow notifications.");
+                default: return MayaControls.res("error","Unsupported automation action.");
+            }
+        } catch(Exception e) { return MayaControls.res("error", "Automation unavailable: " + e.getClass().getSimpleName()); }
+    }
+    private static JSONArray list(Context c) throws Exception {
+        JSONArray arr=new JSONArray(); long now=System.currentTimeMillis();
+        for(Map.Entry<String,?> e:prefs(c).getAll().entrySet()) if(e.getKey().startsWith("rem:")) {
+            try { JSONObject r=new JSONObject(String.valueOf(e.getValue())); if(r.getLong("at")>now) arr.put(r); }
+            catch(Exception ignored){}
+        }
+        return arr;
+    }
+}
+EOF_V2_AUTOMATIONS
+
+if ! grep -q 'android:name="com.tanim.maya.MayaAutomations"' "$MANIFEST"; then
+  python3 - <<'PY_V2_MANIFEST'
+from pathlib import Path
+p = Path('android/app/src/main/AndroidManifest.xml')
+s = p.read_text()
+insert = '''<receiver android:name="com.tanim.maya.MayaAutomations" android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.ACTION_POWER_CONNECTED" />
+                <action android:name="android.intent.action.ACTION_POWER_DISCONNECTED" />
+                <action android:name="android.intent.action.BATTERY_LOW" />
+            </intent-filter>
+        </receiver>'''
+assert '</application>' in s
+p.write_text(s.replace('</application>',insert+'\n    </application>',1))
+PY_V2_MANIFEST
 fi
 
 echo "== native setup done =="
