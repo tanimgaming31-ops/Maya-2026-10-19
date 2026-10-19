@@ -436,6 +436,8 @@ import android.app.Activity;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
+import android.database.Cursor;
+import android.provider.ContactsContract;
 import android.hardware.camera2.CameraCharacteristics;
 import android.hardware.camera2.CameraManager;
 import android.media.AudioManager;
@@ -482,6 +484,7 @@ public class MayaControls {
                 case "SEND_SMS": return sms(ctx, act, a.optString("phone", ""), a.optString("message", ""));
                 case "OPEN_URL": return openUrl(ctx, a);
                 case "SHARE_DRAFT": return shareDraft(ctx, a.optString("text", ""));
+                case "PREPARE_CHAT_CONTACT": return prepareChatContact(ctx, act, a);
                 case "OPEN_APP": return openApp(ctx, a);
                 case "OPEN_CAMERA": return startSimple(ctx, new Intent(MediaStore.ACTION_IMAGE_CAPTURE), "Camera opened.");
                 case "OPEN_GALLERY": return startSimple(ctx, Intent.makeMainSelectorActivity(Intent.ACTION_MAIN, Intent.CATEGORY_APP_GALLERY), "Gallery opened.");
@@ -606,6 +609,69 @@ public class MayaControls {
         } catch (Exception e) {
             return res("error", "Unable to open Android share sheet: " + e.getMessage());
         }
+    }
+
+    /**
+     * Strict contact-name matching for WhatsApp only. Contacts stay on the phone:
+     * no phone number is exposed in a JavaScript response or saved anywhere.
+     * Messenger / IMO / Telegram do not offer a universal named-chat draft API.
+     * This method DOES NOT send any messages.
+     */
+    private static String prepareChatContact(Context ctx, final Activity act, JSONObject a) {
+        final String app = a.optString("app", "").trim().toLowerCase(Locale.ROOT);
+        final String name = a.optString("contact_name", "").trim();
+        final String body = a.optString("message", "").trim();
+        if (name.length() == 0 || name.length() > 70 || body.length() == 0 || body.length() > 500)
+            return res("error", "Exact contact name (1-70 chars) and a short message (1-500 chars) are required.");
+        if (!(app.equals("whatsapp") || app.equals("messenger") || app.equals("imo") || app.equals("telegram")))
+            return res("error", "Only WhatsApp, Messenger, IMO and Telegram drafts are supported.");
+        if (!app.equals("whatsapp")) {
+            String pkg = app.equals("messenger") ? "com.facebook.orca" : app.equals("imo") ? "com.imo.android.imoim" : "org.telegram.messenger";
+            try {
+                Intent send = new Intent(Intent.ACTION_SEND);
+                send.setType("text/plain");
+                send.putExtra(Intent.EXTRA_TEXT, body);
+                send.setPackage(pkg);
+                send.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                ctx.startActivity(send);
+                return res("opened", "Message draft opened in " + app + ". Select the contact named '" + name + "' and tap Send yourself. No chat was selected or sent automatically.");
+            } catch (Exception ex) {
+                return res("error", app + " share draft is not available on this phone. Open the app and select the recipient manually.");
+            }
+        }
+        if (ctx.checkSelfPermission(Manifest.permission.READ_CONTACTS) != PackageManager.PERMISSION_GRANTED) {
+            if (act != null) act.runOnUiThread(new Runnable() {
+                @Override public void run() { act.requestPermissions(new String[] {Manifest.permission.READ_CONTACTS}, 7703); }
+            });
+            return res("needs_permission", "Allow Contacts permission in Android, then ask again. Maya only looks for the exact name you specified.");
+        }
+        String found = null;
+        java.util.HashSet<String> matches = new java.util.HashSet<String>();
+        String colName = ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME_PRIMARY;
+        String colNumber = ContactsContract.CommonDataKinds.Phone.NUMBER;
+        try (Cursor cur = ctx.getContentResolver().query(
+                ContactsContract.CommonDataKinds.Phone.CONTENT_URI,
+                new String[]{colName, colNumber},
+                colName + " = ? COLLATE NOCASE", new String[]{name}, null)) {
+            if (cur == null) return res("error", "Contacts provider is unavailable.");
+            while (cur.moveToNext()) {
+                String candidate = cur.getString(0), number = cur.getString(1);
+                if (candidate == null || !candidate.trim().equalsIgnoreCase(name) || number == null) continue;
+                String val = number.replaceAll("[\\s().-]", "");
+                if (val.startsWith("00")) val = "+" + val.substring(2);
+                if (val.startsWith("+") && val.substring(1).matches("[0-9]{7,15}")) matches.add(val);
+            }
+        } catch (Exception e) { return res("error", "Cannot read contacts on this phone."); }
+        if (matches.size() == 0) return res("error", "No unique WhatsApp-ready number found for that exact contact name. Save their number with +country code (for example +880...) and try again.");
+        if (matches.size() > 1) return res("error", "Several phone numbers match this name. Open the contact and choose a specific international number; Maya will not guess.");
+        found = matches.iterator().next().substring(1);
+        try {
+            String url = "https://wa.me/" + found + "?text=" + Uri.encode(body);
+            Intent i = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
+            i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            ctx.startActivity(i);
+            return res("opened", "WhatsApp draft opened for the exact saved contact name. Check the recipient and tap Send. No message was sent automatically.");
+        } catch (Exception e) { return res("error", "Cannot open WhatsApp chat: " + e.getMessage()); }
     }
 
     private static String openApp(Context ctx, JSONObject a) {
@@ -1129,3 +1195,8 @@ fi
 echo "== native setup done =="
 grep -n "MayaNotificationService" "$MANIFEST" || true
 grep -n "maya-debug.keystore" android/app/build.gradle || true
+
+# Maya V3: request Contacts only when user explicitly prepares a WhatsApp draft by name.
+if ! grep -q 'android.permission.READ_CONTACTS' "$MANIFEST"; then
+  sed -i 's#<application#<uses-permission android:name="android.permission.READ_CONTACTS" />\n    <application#' "$MANIFEST"
+fi
