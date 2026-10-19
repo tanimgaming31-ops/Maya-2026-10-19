@@ -1,0 +1,13 @@
+Maya tested components 2026-10-19
+- JavaScript syntax: pass (Node 22)
+- Main UI startup in headless Chromium mobile viewport: pass
+- Settings controls visibility: pass
+- Memory UI save: pass
+- Pure logic draft and model tests: pass
+- Shell syntax: pass
+- Native shell script run against fake Capacitor directory: pass
+- AndroidManifest XML parse: pass
+- APK Gradle compilation: NOT RUN (no Android SDK/Gradle available)
+- Gemini live network: NOT RUN (no user's Gemini API key)
+- Android microphone / camera: NOT TESTED (no Android device attached)
+- Messenger/IMO recipient/send: USER ACTION REQUIRED
