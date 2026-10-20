@@ -1758,3 +1758,389 @@ s=s.replace('    @Override\n    protected void onNewIntent',
 main.write_text(s)
 print('Maya V5 Android bridge, contact picker and safe screen reader installed.')
 PY_V5_MERGE
+
+# MAYA V5.2 — explicit, limited and testable Android controls.
+# This patch runs after V1-V5 source generation. No previous UI/data is deleted.
+cat > "$APP/MayaV52Controls.java" <<'JAVA'
+package com.tanim.maya;
+
+import android.Manifest;
+import android.app.Activity;
+import android.app.AlertDialog;
+import android.content.Context;
+import android.content.Intent;
+import android.content.pm.PackageManager;
+import android.database.Cursor;
+import android.net.Uri;
+import android.os.Build;
+import android.os.Handler;
+import android.os.Looper;
+import android.provider.ContactsContract;
+import android.provider.Settings;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.Locale;
+import org.json.JSONObject;
+
+public final class MayaV52Controls {
+    private MayaV52Controls(){}
+    private static String resp(String status,String message){
+        JSONObject obj=new JSONObject();
+        try{obj.put("status",status);obj.put("message",message);}catch(Exception ignored){}
+        return obj.toString();
+    }
+    static String run(Context ctx,Activity act,String action,JSONObject args){
+        switch(action){
+            case "V52_OVERLAY_PERMISSION":
+                if(Build.VERSION.SDK_INT<23)return resp("error","Overlay permission needs Android 6+.");
+                if(Settings.canDrawOverlays(ctx))return resp("ok","Floating overlay permission already granted.");
+                if(act==null)return resp("error","Please open Maya to grant overlay permission.");
+                act.runOnUiThread(()->{
+                    Intent i=new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,Uri.parse("package:"+ctx.getPackageName()));
+                    try{act.startActivity(i);}catch(Exception ignored){}
+                });
+                return resp("needs_permission","Enable Display over other apps for Maya, then return and tap Show.");
+            case "V52_OVERLAY_SHOW":
+                if(Build.VERSION.SDK_INT<23||!Settings.canDrawOverlays(ctx))
+                    return resp("needs_permission","Enable Display over other apps in Android Settings.");
+                try{
+                    if(act!=null)act.runOnUiThread(()->MayaV52Overlay.show(ctx));
+                    else new Handler(Looper.getMainLooper()).post(()->MayaV52Overlay.show(ctx));
+                    return resp("pending","Floating shortcut requested (Maya + screen snapshot); check if it appears. It is not a 3D character.");
+                }catch(Exception e){return resp("error","Overlay blocked: "+e.getClass().getSimpleName());}
+            case "V52_OVERLAY_HIDE":
+                new Handler(Looper.getMainLooper()).post(()->MayaV52Overlay.hide());
+                return resp("ok","Floating shortcut hidden.");
+            case "V52_SCREENSHOT_START":
+                return MayaV52Capture.start(ctx);
+            case "V52_SCREENSHOT_RESULT":
+                return MayaV52Capture.read();
+            case "V52_CONTACT_FIND":
+                return findContact(ctx,act,args.optString("name",""),args.optString("message",""));
+            case "V52_SEQUENCE":
+                return sequence(ctx,args.optString("preset",""));
+            default:return resp("error","Unknown V5.2 action.");
+        }
+    }
+    private static String clean(String s){
+        return java.text.Normalizer.normalize(s,java.text.Normalizer.Form.NFD)
+            .replaceAll("\\p{M}","").toLowerCase(Locale.ROOT).trim().replaceAll("\\s+"," ");
+    }
+    private static final class Match{
+        final String name,number;final int score;
+        Match(String n,String p,int s){name=n;number=p;score=s;}
+    }
+    private static String findContact(Context ctx,Activity act,String name,String message){
+        name=name.trim();message=message.trim();
+        if(name.length()<2||name.length()>70||message.isEmpty()||message.length()>500)
+            return resp("error","Enter a name (2–70 letters) and draft (1–500 characters).");
+        if(act==null)return resp("error","Open Maya to choose a contact.");
+        if(ctx.checkSelfPermission(Manifest.permission.READ_CONTACTS)!=PackageManager.PERMISSION_GRANTED){
+            act.runOnUiThread(()->act.requestPermissions(new String[]{Manifest.permission.READ_CONTACTS},6521));
+            return resp("needs_permission","Allow Contacts, then tap Find again. Contacts are matched only on the phone.");
+        }
+        final ArrayList<Match> matches=new ArrayList<>();HashSet<String> seen=new HashSet<>();
+        String wanted=clean(name);
+        String[] cols={ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME_PRIMARY,
+            ContactsContract.CommonDataKinds.Phone.NUMBER};
+        try(Cursor c=ctx.getContentResolver().query(ContactsContract.CommonDataKinds.Phone.CONTENT_URI,
+            cols,null,null,null)){
+            if(c==null)return resp("error","Android Contacts provider is unavailable.");
+            while(c.moveToNext()){
+                String n=c.getString(0),num=c.getString(1);
+                if(n==null||num==null)continue;
+                String candidate=clean(n);
+                int score=candidate.equals(wanted)?0:candidate.startsWith(wanted)?1:candidate.contains(wanted)?2:100;
+                if(score==100)continue;
+                String digits=num.replaceAll("[\\s().-]","");
+                if(!seen.add(candidate+":"+digits))continue;
+                if(matches.size()>=50)return resp("error","More than 50 contacts match. Enter more of the name.");
+                matches.add(new Match(n,digits,score));
+            }
+        }catch(Exception ex){return resp("error","Unable to read contacts (permission/provider error).");}
+        if(matches.isEmpty())return resp("error","No saved contact matches this name. Check spelling/permissions.");
+        matches.sort((x,y)->Integer.compare(x.score,y.score));
+        if(matches.size()>20)return resp("error","More than 20 numbers match. Enter more of the name.");
+        final String msg=message;
+        String[] labels=new String[matches.size()];
+        for(int i=0;i<matches.size();i++){
+            Match m=matches.get(i);String num=m.number;
+            labels[i]=m.name+" • "+(num.length()>4?"••••"+num.substring(num.length()-4):"number unavailable")
+                +(num.startsWith("+")?"":" (needs +country code)");
+        }
+        act.runOnUiThread(()->new AlertDialog.Builder(act)
+            .setTitle("Choose WhatsApp contact and number")
+            .setItems(labels,(dialog,which)->{
+                Match selected=matches.get(which);
+                if(!selected.number.matches("\\+[1-9][0-9]{7,14}")){
+                    new AlertDialog.Builder(act).setMessage("Save this number using +country code in Contacts first.").setPositiveButton("OK",null).show();return;
+                }
+                new AlertDialog.Builder(act)
+                    .setTitle("Open WhatsApp draft?")
+                    .setMessage(selected.name+" • number ending "+selected.number.substring(selected.number.length()-4)+"\nMessage: "+msg+"\n\nYou must tap Send yourself.")
+                    .setNegativeButton("Cancel",null)
+                    .setPositiveButton("Open draft",(d,button)->{
+                        Uri url=Uri.parse("https://wa.me/"+selected.number.substring(1)+"?text="+Uri.encode(msg));
+                        Intent intent=new Intent(Intent.ACTION_VIEW,url);
+                        try{act.startActivity(intent);}catch(Exception ex){
+                            android.widget.Toast.makeText(act,"Cannot open WhatsApp draft.",android.widget.Toast.LENGTH_LONG).show();
+                        }
+                    }).show();
+            }).setNegativeButton("Cancel",null).show());
+        return resp("pending","Contact-choice dialog requested. No message was sent or recipient automatically chosen.");
+    }
+    private static String sequence(Context ctx,String preset){
+        MayaV4AccessService access=MayaV4AccessService.active;
+        if(access==null)return resp("needs_permission","Enable Maya Accessibility controls in Android Settings.");
+        Handler handler=new Handler(Looper.getMainLooper());
+        switch(preset){
+            case "home_lock":
+                if(!access.command("home",""))return resp("error","Home command did not start.");
+                handler.postDelayed(()->{if(access.command("lock",""))ctx.stopService(new Intent(ctx,MayaV4VoiceService.class));},700);
+                return resp("opened","Home accepted; Lock scheduled next. Verify your phone actually locks.");
+            case "back_home":
+                if(!access.command("back",""))return resp("error","Back command did not start.");
+                handler.postDelayed(()->access.command("home",""),600);
+                return resp("opened","Back accepted, Home scheduled next.");
+            case "pause_home":
+                MayaControls.run(ctx,null,"MEDIA_PAUSE",new JSONObject());
+                handler.postDelayed(()->access.command("home",""),400);
+                return resp("opened","Pause requested, Home scheduled next. Media apps may ignore pause.");
+            case "scroll_twice":
+                if(!access.command("scrolldown",""))return resp("error","First scroll was rejected.");
+                handler.postDelayed(()->access.command("scrolldown",""),800);
+                return resp("opened","Two bounded scroll gestures requested; some apps ignore gestures.");
+            default:return resp("error","Choose one of the four predefined routines. Arbitrary automation is not enabled.");
+        }
+    }
+}
+JAVA
+
+cat > "$APP/MayaV52Capture.java" <<'JAVA'
+package com.tanim.maya;
+
+import android.accessibilityservice.AccessibilityService;
+import android.content.Context;
+import android.graphics.Bitmap;
+import android.graphics.Canvas;
+import android.graphics.Color;
+import android.graphics.HardwareRenderer;
+import android.graphics.HardwareBufferRenderer;
+import android.hardware.HardwareBuffer;
+import android.os.Build;
+import android.util.Base64;
+import android.view.Display;
+import org.json.JSONObject;
+import java.io.ByteArrayOutputStream;
+
+public final class MayaV52Capture {
+    private MayaV52Capture(){}
+    private static volatile String state="empty",data="",note="No screenshot has been requested.";
+    private static String result(String status,String message){
+        JSONObject o=new JSONObject();try{o.put("status",status);o.put("message",message);}catch(Exception ignored){}return o.toString();
+    }
+    static String start(Context ctx){
+        if(Build.VERSION.SDK_INT<30)return result("error","Single-screen screenshot needs Android 11 or later.");
+        MayaV4AccessService access=MayaV4AccessService.active;
+        if(access==null)return result("needs_permission","Enable Maya Accessibility and screenshot access in Android Settings.");
+        if("pending".equals(state))return result("pending","Another screenshot is in progress.");
+        state="pending";data="";note="Capturing screen once. Secure windows may block capture.";
+        try{
+            access.takeScreenshot(Display.DEFAULT_DISPLAY,ctx.getMainExecutor(),new AccessibilityService.TakeScreenshotCallback(){
+                @Override public void onSuccess(AccessibilityService.ScreenshotResult shot){
+                    HardwareBuffer buffer=shot.getHardwareBuffer();
+                    try{
+                        Bitmap hardware=Bitmap.wrapHardwareBuffer(buffer,shot.getColorSpace());
+                        if(hardware==null)throw new IllegalStateException("Screenshot bitmap unavailable");
+                        int w=hardware.getWidth(),h=hardware.getHeight();
+                        float scale=Math.min(1f,1280f/Math.max(w,h));
+                        int ow=Math.max(1,Math.round(w*scale)),oh=Math.max(1,Math.round(h*scale));
+                        Bitmap rgb=Bitmap.createBitmap(ow,oh,Bitmap.Config.ARGB_8888);
+                        Canvas canvas=new Canvas(rgb);canvas.drawColor(Color.WHITE);
+                        canvas.drawBitmap(hardware,null,new android.graphics.Rect(0,0,ow,oh),null);
+                        ByteArrayOutputStream jpeg=new ByteArrayOutputStream();
+                        if(!rgb.compress(Bitmap.CompressFormat.JPEG,76,jpeg))throw new IllegalStateException("JPEG conversion failed");
+                        rgb.recycle();
+                        if(jpeg.size()>2*1024*1024)throw new IllegalStateException("Screenshot too large");
+                        data=Base64.encodeToString(jpeg.toByteArray(),Base64.NO_WRAP);
+                        state="ready";note="Screenshot captured in app memory, not uploaded.";
+                    }catch(Exception e){data="";state="error";note="Screenshot processing failed.";}
+                    finally{try{buffer.close();}catch(Exception ignored){}}
+                }
+                @Override public void onFailure(int errorCode){data="";state="error";note="Android refused screenshot (may be a protected screen): "+errorCode;}
+            });
+            return result("pending",note);
+        }catch(Exception ex){state="error";note="Android screenshot permission or service rejected capture.";return result("error",note);}
+    }
+    static String read(){
+        JSONObject o=new JSONObject();
+        try{o.put("status",state);o.put("message",note);
+            if("ready".equals(state)){o.put("data",data);data="";state="empty";note="Screenshot consumed.";}
+        }catch(Exception ignored){}
+        return o.toString();
+    }
+}
+JAVA
+
+cat > "$APP/MayaV52Overlay.java" <<'JAVA'
+package com.tanim.maya;
+
+import android.content.Context;
+import android.content.Intent;
+import android.graphics.Color;
+import android.graphics.PixelFormat;
+import android.os.Build;
+import android.provider.Settings;
+import android.view.Gravity;
+import android.view.View;
+import android.view.WindowManager;
+import android.widget.Button;
+import android.widget.LinearLayout;
+
+public final class MayaV52Overlay {
+    private static WindowManager manager;
+    private static View panel;
+    private MayaV52Overlay(){}
+    static synchronized void show(Context c){
+        if(Build.VERSION.SDK_INT<26 || !Settings.canDrawOverlays(c) || panel!=null)return;
+        try {
+            Context ctx=c.getApplicationContext();
+            manager=(WindowManager)ctx.getSystemService(Context.WINDOW_SERVICE);
+            LinearLayout buttons=new LinearLayout(ctx);buttons.setOrientation(LinearLayout.VERTICAL);
+            buttons.setBackgroundColor(0xD9161930);
+            Button open=new Button(ctx);open.setAllCaps(false);open.setText("Maya");open.setTextColor(Color.WHITE);
+            Button shot=new Button(ctx);shot.setAllCaps(false);shot.setText("📷");shot.setTextColor(Color.WHITE);
+            open.setOnClickListener(v->{
+                Intent i=ctx.getPackageManager().getLaunchIntentForPackage(ctx.getPackageName());
+                if(i!=null){i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_SINGLE_TOP);try{ctx.startActivity(i);}catch(Exception ignored){}}
+            });
+            shot.setOnClickListener(v->{
+                MayaV52Capture.start(ctx);
+                android.os.Handler h=new android.os.Handler(android.os.Looper.getMainLooper());
+                h.postDelayed(()->open.performClick(),1500);
+            });
+            buttons.addView(open,new LinearLayout.LayoutParams(130,100));
+            buttons.addView(shot,new LinearLayout.LayoutParams(130,100));
+            WindowManager.LayoutParams p=new WindowManager.LayoutParams(
+                WindowManager.LayoutParams.WRAP_CONTENT,WindowManager.LayoutParams.WRAP_CONTENT,
+                WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE|WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
+                PixelFormat.TRANSLUCENT);
+            p.gravity=Gravity.END|Gravity.CENTER_VERTICAL;
+            manager.addView(buttons,p);panel=buttons;
+        }catch(Exception e){panel=null;manager=null;}
+    }
+    static synchronized void hide(){
+        if(panel!=null&&manager!=null){try{manager.removeView(panel);}catch(Exception ignored){}}
+        panel=null;manager=null;
+    }
+}
+JAVA
+
+python3 - <<'PY_V52_MERGE'
+from pathlib import Path
+app=Path('android/app/src/main/java/com/tanim/maya')
+manifest=Path('android/app/src/main/AndroidManifest.xml')
+s=manifest.read_text()
+if 'android.permission.SYSTEM_ALERT_WINDOW' not in s:
+    s=s.replace('<application','<uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />\n    <application',1)
+manifest.write_text(s)
+xml=Path('android/app/src/main/res/xml/maya_v4_accessibility.xml')
+s=xml.read_text()
+assert 'android:canRetrieveWindowContent="true"' in s
+if 'android:canTakeScreenshot' not in s:
+    s=s.replace('android:canRetrieveWindowContent="true"','android:canRetrieveWindowContent="true"\n android:canTakeScreenshot="true"',1)
+xml.write_text(s)
+bridge=app/'MayaBridge.java'
+s=bridge.read_text()
+needle='return MayaControls.run(ctx, act, action, a);'
+assert s.count(needle)==1
+s=s.replace(needle,'if (action != null && action.startsWith("V52_")) return MayaV52Controls.run(ctx, act, action, a);\n            '+needle,1)
+bridge.write_text(s)
+# Remove optional dependencies imported inadvertently by platforms on old SDKs
+capture=app/'MayaV52Capture.java'
+s=capture.read_text().replace('import android.graphics.HardwareRenderer;\n','').replace('import android.graphics.HardwareBufferRenderer;\n','')
+capture.write_text(s)
+# Release the shortcut if the background voice session ends; don't require a floating window to listen.
+voice=app/'MayaV4VoiceService.java'
+s=voice.read_text()
+needle='running = true;\n        stopping = false;'
+if s.count(needle)==1:
+    s=s.replace(needle,needle+'\n        MayaV52Overlay.show(this);',1)
+needle='@Override public void onDestroy() {'
+assert needle in s
+s=s.replace(needle,needle+'\n        MayaV52Overlay.hide();',1)
+voice.write_text(s)
+print('V5.2 native patches registered. Existing V5, V4 and V3 controls kept.')
+PY_V52_MERGE
+
+python3 - <<'PY_V52_VOICE'
+from pathlib import Path
+app=Path('android/app/src/main/java/com/tanim/maya')
+controls=app/'MayaV52Controls.java'
+s=controls.read_text()
+needle='            case "V52_SEQUENCE":\n                return sequence(ctx,args.optString("preset",""));'
+assert s.count(needle)==1
+s=s.replace(needle,'''            case "V52_SEQUENCE":
+                return sequence(ctx,args.optString("preset",""));
+            case "V52_SOCIAL_SEARCH":
+                return socialSearch(ctx,args.optString("app",""),args.optString("query",""));''',1)
+marker='    private static String clean(String s){'
+assert s.count(marker)==1
+method='''    private static String socialSearch(Context ctx,String app,String query){
+        app=app.toLowerCase(Locale.ROOT).trim();query=query.trim();
+        if(query.length()<2||query.length()>120)return resp("error","Search requires 2–120 characters.");
+        final String url,pkg;
+        switch(app){
+            case "youtube":url="https://www.youtube.com/results?search_query="+Uri.encode(query);pkg="com.google.android.youtube";break;
+            case "tiktok":url="https://www.tiktok.com/search?q="+Uri.encode(query);pkg="com.zhiliaoapp.musically";break;
+            case "facebook":url="https://www.facebook.com/search/top/?q="+Uri.encode(query);pkg="com.facebook.katana";break;
+            case "instagram":
+                if(!query.matches("[A-Za-z0-9._]{1,30}"))return resp("error","Instagram profile lookup needs an exact username (letters, numbers, _ or .). No guessing.");
+                url="https://www.instagram.com/"+query+"/";pkg="com.instagram.android";break;
+            default:return resp("error","Only YouTube, TikTok, Facebook and Instagram supported.");
+        }
+        Intent i=new Intent(Intent.ACTION_VIEW,Uri.parse(url));
+        i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);i.setPackage(pkg);
+        try{ctx.startActivity(i);}
+        catch(Exception first){
+            try{i.setPackage(null);ctx.startActivity(i);}
+            catch(Exception second){return resp("error","Cannot open search in app or browser.");}
+        }
+        return resp("opened","Search URL handed to Android. Verify the target app displayed the results.");
+    }
+'''
+s=s.replace(marker,method+marker,1)
+controls.write_text(s)
+voice=app/'MayaV4Controls.java'
+s=voice.read_text()
+needle='        if (words.contains("read screen")'
+assert s.count(needle)==1
+addition='''        if (words.contains("take screenshot") || words.contains("capture screen") || words.contains("স্ক্রিনশট নাও")) {
+            MayaV52Capture.start(ctx);return;
+        }
+        if (words.contains("scroll down twice") || words.contains("দুইবার নিচে স্ক্রল")) {
+            MayaV52Controls.run(ctx,null,"V52_SEQUENCE",new JSONObject().put("preset","scroll_twice"));return;
+        }
+        if (words.contains("pause music then home") || words.contains("গান বন্ধ করে হোমে")) {
+            MayaV52Controls.run(ctx,null,"V52_SEQUENCE",new JSONObject().put("preset","pause_home"));return;
+        }
+        for(String platform:new String[]{"youtube","tiktok","facebook","instagram"}) {
+            String prefix="search "+platform+" ";
+            if(words.startsWith(prefix)) {
+                try{MayaV52Controls.run(ctx,null,"V52_SOCIAL_SEARCH",
+                    new JSONObject().put("app",platform).put("query",words.substring(prefix.length())));
+                }catch(Exception ignored){}
+                return;
+            }
+        }
+'''
+# JSONObject.put throws JSONException checked in Android? org.json.JSONException is checked for Android, voiceCommand no throws, so try wrappers needed.
+addition=addition.replace('MayaV52Controls.run(ctx,null,"V52_SEQUENCE",new JSONObject().put("preset","scroll_twice"));return;',
+'''try{MayaV52Controls.run(ctx,null,"V52_SEQUENCE",new JSONObject().put("preset","scroll_twice"));}catch(Exception ignored){}return;''')
+addition=addition.replace('MayaV52Controls.run(ctx,null,"V52_SEQUENCE",new JSONObject().put("preset","pause_home"));return;',
+'''try{MayaV52Controls.run(ctx,null,"V52_SEQUENCE",new JSONObject().put("preset","pause_home"));}catch(Exception ignored){}return;''')
+s=s.replace(needle,addition+needle,1)
+voice.write_text(s)
+print('Maya V5.2 social lookup and bounded, explicit background voice routines ready.')
+PY_V52_VOICE

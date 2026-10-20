@@ -330,6 +330,18 @@ input[type=range]{width:130px;accent-color:var(--c)}
   <div class="krow"><button class="btn" id="v5SaveBackup">Save local snapshot</button><button class="btn" id="v5ExportBackup">Export backup file</button><button class="btn" id="v5RestoreBackup">Restore local snapshot</button><button class="btn" id="v5ImportBackup">Import backup file</button></div><input type="file" id="v5ImportBackupFile" accept=".json,application/json" hidden>
   <p id="v5BackupStatus" class="msg">No snapshot checked yet.</p>
 
+  <h3>Maya V5.2 — Screen Vision & Floating Controls (Android test)</h3>
+  <p class="note">Explicit permission required. A movable-looking compact floating shortcut can appear over supported apps while Background Voice is on. It is not a 3D floating model. Screenshot capture uses Android Accessibility (Android 11+), excludes secure windows, remains on this device until YOU choose Analyze and confirm upload to Gemini.</p>
+  <div class="krow"><button class="btn" id="v52OverlayPermission">Allow floating window</button><button class="btn" id="v52OverlayStart">Show floating shortcut</button><button class="btn" id="v52OverlayStop">Hide floating shortcut</button></div>
+  <div class="krow"><button class="btn pri" id="v52Screenshot">Capture screen once</button><button class="btn" id="v52UseScreenshot">Use image in AI photo reader</button></div>
+  <img id="v52Preview" alt="Screenshot captured on this device" style="display:none;max-width:100%;max-height:230px;object-fit:contain;border-radius:12px" />
+  <p class="note">Take a screenshot from the floating shortcut while the other app is open, or capture the current app screen here. The selected screenshot is NOT uploaded unless you confirm analysis in the existing AI photo reader.</p>
+  <h3>Smart WhatsApp contact finder & safe routines</h3>
+  <div class="krow"><input id="v52ContactName" class="inp" style="flex:1;min-width:140px" maxlength="70" placeholder="Name or part of saved contact name"/><button class="btn" id="v52FindContact">Find saved contact</button></div>
+  <textarea id="v52ContactMessage" class="inp wide" rows="2" maxlength="500" placeholder="Message draft — you must tap Send yourself"></textarea>
+  <p class="note">Searches Android contacts locally by partial name after permission. If multiple numbers match, Maya shows a list to choose; no contact data is sent to Gemini or another server. Messenger/Imo still require choosing the chat manually.</p>
+  <div class="krow"><select id="v52Routine" class="inp" style="flex:1;min-width:160px"><option value="home_lock">Go Home, then Lock</option><option value="back_home">Back, then Home</option><option value="pause_home">Pause music, then Home</option><option value="scroll_twice">Scroll down twice</option></select><button class="btn" id="v52RunRoutine">Run permitted routine</button></div>
+  <p class="msg" id="v52Status" aria-live="polite">V5.2 actions are available only in a built Android APK after granting permissions.</p>
 <h3>Phone reminders</h3>
   <p class="note">Reminders are stored only on this device, rescheduled after restart, and may arrive late in Android battery-saving mode. Notification permission is required.</p>
   <input id="v2ReminderTitle" class="inp wide" maxlength="120" placeholder="What should Maya remind you about?">
@@ -1919,6 +1931,60 @@ $5('v5File3d')?.addEventListener('change',async ev=>{
    if(!last||Date.now()-last>24*3600*1000)save();}
  automaticBackup();setInterval(automaticBackup,15*60*1000);
  if(getSnap())$('v5BackupStatus').textContent='Local snapshot exists. Export it to protect against uninstall or phone loss.';
+})();
+</script>
+<script>
+/* Maya V5.2: user-initiated controls. Never send screenshot or contacts without consent. */
+(()=>{
+ const g=id=>document.getElementById(id),out=t=>{if(g('v52Status'))g('v52Status').textContent=t;};
+ const call=(action,args={})=>{
+  if(!window.MayaBridge||typeof window.MayaBridge.control!=='function')return {status:'unavailable',message:'Open the Maya Android APK.'};
+  try{return JSON.parse(window.MayaBridge.control(action,JSON.stringify(args)));}catch(e){return {status:'error',message:String(e.message||e)};}
+ };
+ const report=r=>out((r.status||'unknown')+': '+(r.message||'No status returned.'));
+ g('v52OverlayPermission')?.addEventListener('click',()=>report(call('V52_OVERLAY_PERMISSION')));
+ g('v52OverlayStart')?.addEventListener('click',()=>report(call('V52_OVERLAY_SHOW')));
+ g('v52OverlayStop')?.addEventListener('click',()=>report(call('V52_OVERLAY_HIDE')));
+ g('v52FindContact')?.addEventListener('click',()=>{
+   const name=g('v52ContactName').value.trim(),message=g('v52ContactMessage').value.trim();
+   if(name.length<2||!message){out('Enter at least two letters of the name and the message draft.');return;}
+   if(!confirm('Look up saved contacts ON THIS PHONE and show matches for '+name+'? No message is sent.'))return;
+   report(call('V52_CONTACT_FIND',{name,message}));
+ });
+ g('v52RunRoutine')?.addEventListener('click',()=>{
+   const preset=g('v52Routine').value;
+   if(!confirm('Run this specific screen-control routine: '+g('v52Routine').selectedOptions[0].textContent+'?'))return;
+   report(call('V52_SEQUENCE',{preset}));
+ });
+ let screenshotBase64=null, pollTimer=null, pollCount=0;
+ const poll=()=>{
+    const r=call('V52_SCREENSHOT_RESULT');
+    if(r.status==='pending'){if(++pollCount>40){out('Screenshot timed out; try again.');return;}pollTimer=setTimeout(poll,450);return;}
+    if(r.status==='ready'&&r.data){screenshotBase64=r.data;g('v52Preview').src='data:image/jpeg;base64,'+r.data;g('v52Preview').style.display='block';out('Screenshot ready on your phone. Tap Use image, then confirm before sending it to Gemini.');}
+    else report(r);
+ };
+ g('v52Screenshot')?.addEventListener('click',()=>{
+   if(!confirm('Capture the currently visible screen once? Screen may contain private information. Secure screens cannot be captured.'))return;
+   screenshotBase64=null;pollCount=0;g('v52Preview').style.display='none';if(pollTimer)clearTimeout(pollTimer);
+   const r=call('V52_SCREENSHOT_START');report(r);
+   if(r.status==='pending')poll();
+ });
+ g('v52UseScreenshot')?.addEventListener('click',()=>{
+   if(!screenshotBase64){ // the floating shortcut may have captured a screen before Maya was opened
+     const r=call('V52_SCREENSHOT_RESULT');
+     if(r.status==='ready'&&r.data)screenshotBase64=r.data;
+   }
+   if(!screenshotBase64){out('No screenshot is available. Capture one first (including via floating shortcut).');return;}
+   try{
+     const binary=atob(screenshotBase64),bytes=new Uint8Array(binary.length);
+     for(let i=0;i<binary.length;i++)bytes[i]=binary.charCodeAt(i);
+     const f=new File([bytes],'maya-screen-capture.jpg',{type:'image/jpeg'});
+     if(typeof selectVisionPhoto!=='function')throw Error('AI photo reader unavailable');
+     selectVisionPhoto(f);
+     out('Screenshot selected. Go to AI photo reader and tap Describe photo or Read & translate. Google receives it ONLY after you confirm.');
+     screenshotBase64=null;
+   }catch(e){out('Could not pass screenshot to AI reader: '+String(e.message||e));}
+ });
 })();
 </script>
 </body>
