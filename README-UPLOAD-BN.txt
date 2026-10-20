@@ -1,0 +1,1 @@
+এই ZIP Extract করে তিনটি ফাইল GitHub repo root-এ upload করো (মডেল public হবে): index.html, setup-native.sh, maya.vrm। 3D মডেল private রাখতে চাইলে শুধু প্রথম দুটি আপলোড করো; অ্যাপে GLB/VRM model picker ব্যবহার করো।

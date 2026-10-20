@@ -2144,3 +2144,59 @@ s=s.replace(needle,addition+needle,1)
 voice.write_text(s)
 print('Maya V5.2 social lookup and bounded, explicit background voice routines ready.')
 PY_V52_VOICE
+
+# MAYA V6 — a read-only permission health report, never requests sensitive access.
+# Patches source files produced above; does not alter V1-V5.2 functionality.
+python3 - <<'PY_V6_NATIVE_DIAGNOSTICS'
+from pathlib import Path
+app=Path('android/app/src/main/java/com/tanim/maya')
+controls=app/'MayaV52Controls.java'
+bridge=app/'MayaBridge.java'
+s=controls.read_text()
+needle='            case "V52_SEQUENCE":\n                return sequence(ctx,args.optString("preset",""));'
+if needle not in s:
+    raise RuntimeError('Expected Maya V5.2 native action switch not found. Cannot add V6 diagnostics safely.')
+s=s.replace(needle,'''            case "V52_SEQUENCE":
+                return sequence(ctx,args.optString("preset",""));
+            case "V6_PERMISSION_REPORT":
+                return report(ctx);''',1)
+method='''    private static String report(Context ctx) {
+        JSONObject out=new JSONObject();
+        try {
+            out.put("status","ok");
+            out.put("message","Android permission snapshot; refresh after changing Settings.");
+            out.put("androidSdk",Build.VERSION.SDK_INT);
+            out.put("mic",ctx.checkSelfPermission(Manifest.permission.RECORD_AUDIO)==PackageManager.PERMISSION_GRANTED);
+            out.put("camera",ctx.checkSelfPermission(Manifest.permission.CAMERA)==PackageManager.PERMISSION_GRANTED);
+            out.put("contacts",ctx.checkSelfPermission(Manifest.permission.READ_CONTACTS)==PackageManager.PERMISSION_GRANTED);
+            out.put("notifications",Build.VERSION.SDK_INT<33 || ctx.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)==PackageManager.PERMISSION_GRANTED);
+            out.put("overlay",Build.VERSION.SDK_INT>=23 && Settings.canDrawOverlays(ctx));
+            String services=Settings.Secure.getString(ctx.getContentResolver(),Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES);
+            out.put("accessibility",services!=null && services.contains(ctx.getPackageName()));
+        } catch(Exception e) {
+            try{out.put("status","error");out.put("message","Android could not read every permission state.");}catch(Exception ignored){}
+        }
+        return out.toString();
+    }
+'''
+anchor='    private static String clean(String s){'
+if s.count(anchor)!=1: raise RuntimeError('Missing V5.2 method anchor')
+s=s.replace(anchor,method+anchor,1)
+controls.write_text(s)
+s=bridge.read_text()
+old='action.startsWith("V52_")'
+assert s.count(old)==1, 'Unexpected native bridge code; no silent fallback'
+s=s.replace(old,'(action.startsWith("V52_") || action.equals("V6_PERMISSION_REPORT"))',1)
+bridge.write_text(s)
+print('Maya V6 permission report installed (read-only).')
+PY_V6_NATIVE_DIAGNOSTICS
+
+# Maya V6: preserve the user's original rigged VRM model inside the Capacitor web assets.
+# This optional file contains NO API key; no model is uploaded to third-party services.
+if [ -f maya.vrm ]; then
+  mkdir -p www
+  cp maya.vrm www/maya.vrm
+  echo "Maya V6 original VRM asset copied into Android web bundle."
+else
+  echo "Maya V6 bundled 3D asset missing: model button will show a useful error."
+fi
