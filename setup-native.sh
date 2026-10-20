@@ -1534,6 +1534,12 @@ public final class MayaV4Controls {
         }
         if (wake == null) return;
         String words = all.substring(wake.length()).trim();
+        if (words.contains("read screen") || words.contains("what is on screen") || words.contains("স্ক্রিন পড়ো") || words.contains("স্ক্রিনে কি আছে")) {
+            MayaV5Controls.readAloud(ctx); return;
+        }
+        if (words.contains("home and lock") || words.contains("home then lock") || words.contains("হোমে যাও লক") || words.contains("হোমপেজে যাও ফোন লক")) {
+            MayaV5Controls.run(ctx, null, "V5_HOME_LOCK", new JSONObject()); return;
+        }
         if (words.contains("stop listening") || words.contains("stop maya") || words.contains("শোনা বন্ধ")) {
             ctx.stopService(new Intent(ctx, MayaV4VoiceService.class)); return;
         }
@@ -1616,3 +1622,139 @@ if 'return MayaV4Controls.run' not in b:
 bridge.write_text(b)
 print('Maya V4 services and permissions installed; existing V3 UI and data retained.')
 PY_V4_MERGED
+
+
+# Maya V5 — opt-in visible-window reading and Android contact-picker.
+cat > "$APP/MayaV5Controls.java" <<'JAVA'
+package com.tanim.maya;
+
+import android.app.Activity;
+import android.content.Context;
+import android.content.Intent;
+import android.database.Cursor;
+import android.net.Uri;
+import android.provider.ContactsContract;
+import android.view.accessibility.AccessibilityNodeInfo;
+import org.json.JSONArray;
+import org.json.JSONObject;
+import java.util.HashSet;
+import java.util.Locale;
+import java.util.ArrayList;
+
+public final class MayaV5Controls {
+    private MayaV5Controls() {}
+    private static final int PICK_CONTACT = 6515;
+    private static String pendingMessage = null;
+    private static String result(String status,String message){
+        JSONObject j=new JSONObject();try{j.put("status",status);j.put("message",message);}catch(Exception ignored){}return j.toString();
+    }
+    static String run(Context ctx,Activity act,String action,JSONObject data){
+        if("V5_HOME_LOCK".equals(action)){
+            MayaV4AccessService access=MayaV4AccessService.active;
+            if(access==null)return result("needs_permission","Enable Maya Accessibility in Android settings first.");
+            boolean h=access.command("home","");
+            if(!h)return result("error","Home action was not accepted.");
+            new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(()->{
+                boolean locked=access.command("lock","");
+                if(locked)ctx.stopService(new Intent(ctx,MayaV4VoiceService.class));
+            },450);
+            return result("opened","Home accepted; lock requested next. Check if the screen actually locks.");
+        }
+        if("V5_READ_VISIBLE".equals(action)){
+            MayaV4AccessService access=MayaV4AccessService.active;
+            if(access==null)return result("needs_permission","Enable Accessibility. Reading is requested only by the Read button.");
+            AccessibilityNodeInfo root=access.getRootInActiveWindow();
+            if(root==null)return result("error","No accessible foreground window. Try opening the target app first.");
+            ArrayList<String> labels=new ArrayList<>();HashSet<String> seen=new HashSet<>();
+            scan(root,labels,seen,0);
+            JSONObject j=new JSONObject();JSONArray arr=new JSONArray();
+            for(String v:labels)arr.put(v);
+            try{j.put("status","ok");j.put("message","Visible accessible labels only; no screenshot, no network transfer. App: "+root.getPackageName());j.put("visible",arr);}catch(Exception ignored){}
+            return j.toString();
+        }
+        if("V5_CONTACT_PICKER".equals(action)){
+            String message=data.optString("message","").trim();
+            if(message.length()==0||message.length()>500)return result("error","Message must be 1 to 500 characters.");
+            if(act==null)return result("error","Cannot show Android contact picker now.");
+            pendingMessage=message;
+            act.runOnUiThread(()->{
+                try {Intent pick=new Intent(Intent.ACTION_PICK,ContactsContract.CommonDataKinds.Phone.CONTENT_URI);
+                    act.startActivityForResult(pick,PICK_CONTACT);
+                } catch(Exception e){pendingMessage=null;}
+            });
+            return result("opened","Contact picker requested. Select a phone number; check the WhatsApp recipient and personally tap Send.");
+        }
+        return result("error","Unknown V5 action.");
+    }
+    private static void scan(AccessibilityNodeInfo node,ArrayList<String> labels,HashSet<String> seen,int depth){
+        if(node==null||depth>22||labels.size()>=40||!node.isVisibleToUser())return;
+        if(node.isPassword()||node.isEditable())return;
+        CharSequence t=node.getText()!=null?node.getText():node.getContentDescription();
+        if(t!=null){String s=t.toString().trim();
+            // No typed fields, OTPs, long messages, payment numbers or secrets.
+            if(s.length()>=2&&s.length()<90&&!s.matches(".*\\b\\d{4,}\\b.*")
+                 &&!s.toLowerCase(Locale.ROOT).matches(".*(password|passcode|otp|verification code|credit card|pin code).*")){
+                if(seen.add(s))labels.add(s);
+            }
+        }
+        for(int i=0;i<node.getChildCount()&&labels.size()<40;i++)scan(node.getChild(i),labels,seen,depth+1);
+    }
+    static void readAloud(Context ctx){
+        MayaV4AccessService a=MayaV4AccessService.active;
+        if(a==null)return;
+        AccessibilityNodeInfo root=a.getRootInActiveWindow();
+        if(root==null)return;
+        ArrayList<String> labels=new ArrayList<>();HashSet<String> seen=new HashSet<>();scan(root,labels,seen,0);
+        String spoken=labels.isEmpty()?"No accessible text on this screen.":String.join(". ",labels.subList(0,Math.min(10,labels.size())));
+        if(spoken.length()>550)spoken=spoken.substring(0,550);
+        final String output=spoken;
+        try{
+          final android.speech.tts.TextToSpeech[] ref=new android.speech.tts.TextToSpeech[1];
+          ref[0]=new android.speech.tts.TextToSpeech(ctx,status->{
+             if(status==android.speech.tts.TextToSpeech.SUCCESS){
+               ref[0].speak(output,android.speech.tts.TextToSpeech.QUEUE_FLUSH,null,"maya-screen");
+               new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(()->{try{ref[0].shutdown();}catch(Exception ignored){}},15000);
+             }
+          });
+        }catch(Exception ignored){}
+    }
+    static void onPickResult(Activity act,int request,int resultCode,Intent result){
+        if(request!=PICK_CONTACT)return;
+        final String message=pendingMessage;pendingMessage=null;
+        if(resultCode!=Activity.RESULT_OK||result==null||result.getData()==null||message==null)return;
+        try(Cursor cur=act.getContentResolver().query(result.getData(),
+            new String[]{ContactsContract.CommonDataKinds.Phone.NUMBER},null,null,null)){
+            if(cur==null||!cur.moveToFirst()){ show(act,"No phone number was selected."); return; }
+            String number=cur.getString(0);
+            if(number==null){show(act,"Selected contact has no number.");return;}
+            String digits=number.replaceAll("[\\s().-]","");
+            if(!digits.matches("\\+[1-9][0-9]{7,14}")){show(act,"Save this contact with +country code first. No chat opened.");return;} // No guessing local dial codes.
+            String url="https://wa.me/"+digits.substring(1)+"?text="+Uri.encode(message);
+            Intent view=new Intent(Intent.ACTION_VIEW,Uri.parse(url));
+            view.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            act.startActivity(view); // Opens draft only; final Send is manual.
+        }catch(Exception ignored){show(act,"Could not open WhatsApp draft. No message was sent.");}
+    }
+    private static void show(Activity a,String s){a.runOnUiThread(()->android.widget.Toast.makeText(a,s,android.widget.Toast.LENGTH_LONG).show());}
+}
+JAVA
+python3 - <<'PY_V5_MERGE'
+from pathlib import Path
+bridge=Path('android/app/src/main/java/com/tanim/maya/MayaBridge.java')
+s=bridge.read_text()
+needle='if (action != null && action.startsWith("V4_")) return MayaV4Controls.run(ctx, act, action, a);'
+assert s.count(needle)==1, 'V4 control dispatch changed; abort unsafe patch'
+s=s.replace(needle,needle+'\n            if (action != null && action.startsWith("V5_")) return MayaV5Controls.run(ctx, act, action, a);',1)
+bridge.write_text(s)
+main=Path('android/app/src/main/java/com/tanim/maya/MainActivity.java')
+s=main.read_text()
+assert 'protected void onNewIntent' in s
+assert 'void onActivityResult' not in s
+s=s.replace('    @Override\n    protected void onNewIntent',
+    '    @Override\n    protected void onActivityResult(int requestCode,int resultCode,Intent data) {\n'
+    '        super.onActivityResult(requestCode,resultCode,data);\n'
+    '        MayaV5Controls.onPickResult(this,requestCode,resultCode,data);\n'
+    '    }\n\n    @Override\n    protected void onNewIntent',1)
+main.write_text(s)
+print('Maya V5 Android bridge, contact picker and safe screen reader installed.')
+PY_V5_MERGE

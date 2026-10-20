@@ -136,6 +136,7 @@ input[type=range]{width:130px;accent-color:var(--c)}
 .note{font-size:12.5px;color:var(--dim);line-height:1.45;margin-top:14px}
 @media (max-height:640px){.mic{width:70px;height:70px}.caps{min-height:76px}#sub{font-size:16px}}
 </style>
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.164.1/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.164.1/examples/jsm/"}}</script>
 </head>
 <body>
 <div id="app">
@@ -309,6 +310,26 @@ input[type=range]{width:130px;accent-color:var(--c)}
   <div class="krow"><button class="btn" id="v4FirstVideo">First YouTube video (experimental)</button><button class="btn" id="v4Lock">Lock screen</button></div>
   <div class="krow"><input id="v4TapText" class="inp" style="flex:1;min-width:120px" placeholder="Visible button text (e.g. Profile)" maxlength="90"><button class="btn" id="v4TapBtn">Tap visible text</button></div>
   <p class="msg" id="v4Result" aria-live="polite">Not tested on this device.</p>
+
+  <h3>Maya V5 — 3D Model &amp; Smart Phone (test features)</h3>
+  <p class="note">Keep the original Maya as the default. Choose your OWN rigged .glb or .vrm file to preview it temporarily. Facial movements depend on morph targets included in the model. Internet is needed to load the Three.js viewer; this is NOT a 3D-model generator.</p>
+  <div class="krow"><button class="btn pri" id="v5Import3d">Choose GLB / VRM model</button><button class="btn" id="v5Original">Use original Maya</button></div>
+  <input type="file" id="v5File3d" accept=".glb,.vrm,model/gltf-binary" hidden>
+  <div class="row"><div>Imported 3D animation<small>Walking requires a walking animation in your uploaded model. Lip motion approximates audio amplitude; visemes are not guaranteed.</small></div>
+    <select id="v5Anim"><option value="idle">Idle</option><option value="walk">Walk (if available)</option></select></div>
+  <div class="row"><div>3D outfit tint (optional)</div><select id="v5Tint"><option value="original">Original textures</option><option value="#ffb4d8">Pink tint</option><option value="#99dbff">Blue tint</option><option value="#ded0ff">Violet tint</option></select></div>
+  <p class="msg" id="v5ModelStatus">Original 2D Maya is active. Your earlier character remains unchanged.</p>
+  <h3>Screen reading &amp; Android Contacts (permission required)</h3>
+  <p class="note">Screen reading requests the current Accessibility window's visible non-editable labels; no screenshot is taken and no screen text is sent to Gemini automatically. Password and editable fields are excluded.</p>
+  <div class="krow"><button class="btn" id="v5ReadScreen">Read visible screen text</button><button class="btn" id="v5HomeLock">Home then Lock</button></div>
+  <div class="krow"><button class="btn" id="v5SelectContact">Pick WhatsApp contact</button></div>
+  <textarea id="v5WhatsAppDraft" class="inp wide" rows="2" maxlength="500" placeholder="Message to prepare for the selected contact — you press Send"></textarea>
+  <p id="v5NativeStatus" class="msg" style="white-space:pre-wrap">Android V5 controls have not been tested.</p>
+  <h3>Safe local backup (on this phone)</h3>
+  <p class="note">An automatic local snapshot of memories, packs and non-secret settings is updated periodically. It stays in this app's storage, and WILL BE LOST if you uninstall or clear app data. Export your backup to a private place for recovery. Gemini API keys are excluded.</p>
+  <div class="krow"><button class="btn" id="v5SaveBackup">Save local snapshot</button><button class="btn" id="v5ExportBackup">Export backup file</button><button class="btn" id="v5RestoreBackup">Restore local snapshot</button><button class="btn" id="v5ImportBackup">Import backup file</button></div><input type="file" id="v5ImportBackupFile" accept=".json,application/json" hidden>
+  <p id="v5BackupStatus" class="msg">No snapshot checked yet.</p>
+
 <h3>Phone reminders</h3>
   <p class="note">Reminders are stored only on this device, rescheduled after restart, and may arrive late in Android battery-saving mode. Notification permission is required.</p>
   <input id="v2ReminderTitle" class="inp wide" maxlength="120" placeholder="What should Maya remind you about?">
@@ -1741,5 +1762,164 @@ if (S.wake) setTimeout(() => Wake.sync(), 600);
 })();
 </script>
 
+<script type="module">
+// Maya V5 optional imported 3D viewer. Original 2D character always available.
+const $5=id=>document.getElementById(id);
+let three=null,viewer=null,scene=null,camera=null,mixer=null,model=null,clock=null,clips=[],raf=0,morphs=[],hairBones=[],loadedURL=null;
+let activeClip=null;
+const say=t=>{if($5('v5ModelStatus'))$5('v5ModelStatus').textContent=t;};
+function restoreOriginal(){
+  if(raf)cancelAnimationFrame(raf);raf=0;
+  if(viewer){if(viewer.renderer)viewer.renderer.dispose();viewer.remove();viewer=null;}
+  if(loadedURL){URL.revokeObjectURL(loadedURL);loadedURL=null;}
+  if(three&&model){model.traverse(o=>{if(o.isMesh){o.geometry&&o.geometry.dispose();if(o.material){(Array.isArray(o.material)?o.material:[o.material]).forEach(m=>m.dispose());}}});}
+  model=null;mixer=null;clips=[];morphs=[];hairBones=[];
+  $5('maya').style.display=''; say('Original Maya restored. 3D models are not retained after closing the app.');
+}
+$5('v5Original')?.addEventListener('click',restoreOriginal);
+$5('v5Import3d')?.addEventListener('click',()=> $5('v5File3d')?.click());
+$5('v5File3d')?.addEventListener('change',async ev=>{
+  const file=ev.target.files&&ev.target.files[0];ev.target.value='';if(!file)return;
+  if(!/\.(glb|vrm)$/i.test(file.name)){say('Choose a self-contained .glb or .vrm. Separate .gltf asset packages are not supported.');return;}
+  if(file.size>45*1024*1024){say('This model is over 45MB. Try a smaller mobile-optimized file.');return;}
+  restoreOriginal(); say('Loading model renderer (needs internet)…');
+  try {
+    const THREE=await import('three');
+    const {GLTFLoader}=await import('three/addons/loaders/GLTFLoader.js');
+    three=THREE;
+    const frame=document.querySelector('.stage');
+    viewer=document.createElement('div');viewer.id='mayaV5Scene';viewer.style.cssText='width:100%;height:100%;position:absolute;inset:0;pointer-events:none;';frame.appendChild(viewer);
+    const renderer=new THREE.WebGLRenderer({alpha:true,antialias:true,powerPreference:'low-power'});
+    renderer.setPixelRatio(Math.min(devicePixelRatio||1,1.6));renderer.outputColorSpace=THREE.SRGBColorSpace;
+    viewer.appendChild(renderer.domElement);viewer.renderer=renderer;
+    scene=new THREE.Scene(); camera=new THREE.PerspectiveCamera(36,1,0.01,120);
+    scene.add(new THREE.HemisphereLight(0xffffff,0x6780ad,2.2));
+    const key=new THREE.DirectionalLight(0xffffff,2);key.position.set(2,4,5);scene.add(key);
+    loadedURL=URL.createObjectURL(file);
+    const gltf=await new Promise((resolve,reject)=>new GLTFLoader().load(loadedURL,resolve,undefined,reject));
+    model=gltf.scene;scene.add(model);clips=gltf.animations||[];
+    const box=new THREE.Box3().setFromObject(model);const height=box.getSize(new THREE.Vector3()).y;
+    if(!Number.isFinite(height)||height<=0.001)throw Error('Model geometry is empty.');
+    const center=box.getCenter(new THREE.Vector3());
+    const targetHeight=3.2;const ratio=targetHeight/height;model.scale.setScalar(ratio);model.position.copy(center).multiplyScalar(-ratio);
+    camera.position.set(0,0.12,6.7);camera.lookAt(0,0.05,0);
+    mixer=new THREE.AnimationMixer(model);
+    model.traverse(o=>{
+      if(o.isMesh && o.morphTargetDictionary && o.morphTargetInfluences)morphs.push(o);
+      if(o.isBone && /hair|bang|pony|tail/i.test(o.name))hairBones.push({bone:o,base:o.rotation.z});
+      if(o.isMesh && o.material)o.userData.v5materials=(Array.isArray(o.material)?o.material:[o.material]).map(m=>({m,base:m.color?m.color.clone():null}));
+    });
+    clock=new THREE.Clock();$5('maya').style.display='none';
+    function playClip(pref){
+      mixer.stopAllAction();let candidate=clips.find(c=>new RegExp(pref==='walk'?'walk':'idle|breath','i').test(c.name));
+      if(!candidate && pref==='idle'&&clips.length)candidate=clips[0];
+      if(candidate){activeClip=mixer.clipAction(candidate);activeClip.reset().play();return candidate.name;}
+      return null;
+    }
+    const initial=playClip('idle');
+    const tint=()=>{
+      if(!model)return;
+      const color=$5('v5Tint').value;
+      model.traverse(o=>(o.userData.v5materials||[]).forEach(({m,base})=>{
+        if(base){m.color.copy(base);if(color!=='original')m.color.multiply(new THREE.Color(color));}
+      }));
+    };tint();
+    $5('v5Tint').onchange=tint;
+    $5('v5Anim').onchange=()=>{
+      if(!model)return;
+      const found=playClip($5('v5Anim').value);
+      say(found?'Playing imported animation: '+found:'No matching animation in this rigged file. Original idle pose remains.');
+    };
+    let w0=0,h0=0;const resize=()=>{const w=viewer.clientWidth,h=viewer.clientHeight;if(w&&h&&(w!==w0||h!==h0)){w0=w;h0=h;renderer.setSize(w,h,false);camera.aspect=w/h;camera.updateProjectionMatrix();}};
+    let tick=0;
+    function animate(){
+      if(!model)return;raf=requestAnimationFrame(animate);if(document.hidden)return;
+      const dt=Math.min(clock.getDelta(),.07);tick+=dt;resize();if(mixer)mixer.update(dt);
+      const state=(typeof app!=='undefined'?app.state:'idle');
+      const talking=state==='talking';const level=(talking&&typeof Player!=='undefined'&&Player.level)?Player.level():0;
+      // This is an audio-amplitude approximation, not phoneme-accurate lip sync.
+      const mouth=talking?Math.min(.9,.09+level*5.5):0;
+      const blink=(tick%3.8<.13)?1:0;
+      for(const mesh of morphs){
+        for(const [name,index] of Object.entries(mesh.morphTargetDictionary)){
+          let v=null;const n=name.toLowerCase();
+          if(/blink/.test(n))v=blink;
+          else if(/mouthopen|jawopen|(^|[_-])aa($|[_-])|viseme_?a|(^|_)a($|_)/.test(n))v=mouth;
+          else if(/smile|happy/.test(n))v=talking?.12:.08;
+          if(v!==null)mesh.morphTargetInfluences[index]=v;
+        }
+      }
+      if(!activeClip){model.rotation.y=Math.sin(tick*.65)*.045;model.position.y=Math.sin(tick*1.5)*.015;}
+      for(const h of hairBones)h.bone.rotation.z=h.base+Math.sin(tick*1.4)*.015;
+      renderer.render(scene,camera);
+    }
+    say('Imported 3D model loaded. Morph targets: '+morphs.length+' meshes. Animation clips: '+clips.length+(initial?' (idle: '+initial+')':' (no idle clip)')
+      +'. If your model lacks a face rig, lips/eyes will not animate.');
+    animate();
+  }catch(err){restoreOriginal();say('3D import failed: '+(err.message||err)+'. Original Maya is still available.');}
+});
+</script>
+<script>
+/* Maya V5 safe native actions and on-device snapshot. No silent external transfer. */
+(function(){
+ const $=id=>document.getElementById(id);const nativeAction=(type,args={})=>{
+   if(!window.MayaBridge||typeof MayaBridge.control!=='function')return {status:'unavailable',message:'Only supported in the Android APK.'};
+   try{return JSON.parse(window.MayaBridge.control(type,JSON.stringify(args)));}catch(e){return {status:'error',message:String(e.message||e)};}
+ };
+ const status=text=>{const e=$('v5NativeStatus');if(e)e.textContent=text;};
+ $('v5ReadScreen')?.addEventListener('click',()=>{
+    if(!confirm('Read the visible text on the current screen locally? This will not make a screenshot or send text to Gemini.'))return;
+    const r=nativeAction('V5_READ_VISIBLE');status((r.status||'unknown')+': '+(r.message||'')+(r.visible?'\n'+r.visible.join('\n'):'') );
+ });
+ $('v5HomeLock')?.addEventListener('click',()=>{
+   if(!confirm('Go Home and lock your phone now?'))return;
+   const r=nativeAction('V5_HOME_LOCK');status((r.status||'unknown')+': '+(r.message||''));
+ });
+ $('v5SelectContact')?.addEventListener('click',()=>{
+    const message=$('v5WhatsAppDraft').value.trim();if(!message){status('Type the WhatsApp draft text first.');return;}
+    if(!confirm('Open Android contact picker for this message? You must review the recipient and press Send in WhatsApp.'))return;
+    const r=nativeAction('V5_CONTACT_PICKER',{message});status((r.status||'unknown')+': '+(r.message||''));
+ });
+ const snapshot=()=>({app:'maya',schema:3,created:new Date().toISOString(),memories:getMem(),packs:getPacks(),settings:(()=>{const t={...S};delete t.key;delete t.apiKey;return t;})()});
+ function save(){
+   try{const body=JSON.stringify(snapshot());if(body.length>2800000)throw Error('Backup too large for local storage; export manually.');
+      localStorage.setItem('maya.v5snapshot',body);localStorage.setItem('maya.v5backupTime',String(Date.now()));
+      $('v5BackupStatus').textContent='Local snapshot saved '+new Date().toLocaleString()+'. Export a copy before uninstalling.';
+      return body;
+   }catch(e){$('v5BackupStatus').textContent='Local snapshot failed: '+(e.message||e);return null;}
+ }
+ const getSnap=()=>{try{const s=localStorage.getItem('maya.v5snapshot');return s?JSON.parse(s):null;}catch(e){return null;}};
+ $('v5SaveBackup')?.addEventListener('click',save);
+ $('v5ExportBackup')?.addEventListener('click',()=>{
+   const b=save();if(!b)return;
+   const url=URL.createObjectURL(new Blob([b],{type:'application/json'}));
+   const a=document.createElement('a');a.href=url;a.download='maya-v5-backup-'+new Date().toISOString().slice(0,10)+'.json';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),5000);
+ });
+ function restoreSnapshot(s){
+   if(!Array.isArray(s.memories)||!Array.isArray(s.packs)){ $('v5BackupStatus').textContent='Snapshot is invalid.';return;}
+   const mem=getMem(),packs=getPacks();
+   const existing=new Set(mem.map(m=>m.text)),existingPacks=new Set(packs.map(p=>p.text));
+   const mm=s.memories.filter(m=>m&&typeof m.text==='string'&&!existing.has(m.text));
+   const pp=s.packs.filter(p=>p&&typeof p.text==='string'&&!existingPacks.has(p.text));
+   const okP=setPacks([...packs,...pp]);if(okP)setMem([...mem,...mm]);
+   if(okP&&s.settings&&typeof s.settings==='object'){
+     for(const key of Object.keys(DEFAULTS)){if(key in s.settings && typeof s.settings[key]===typeof DEFAULTS[key])S[key]=s.settings[key];}
+     saveS();
+   }
+   $('v5BackupStatus').textContent=okP?'Restored '+mm.length+' short memories and '+pp.length+' packs. Restart Maya to apply restored settings (Gemini key unchanged).':'Storage full or unavailable.';
+ }
+ $('v5RestoreBackup')?.addEventListener('click',()=>{const s=getSnap();if(!s){$('v5BackupStatus').textContent='No local snapshot saved.';return;}if(confirm('Merge the local snapshot of memories and safe settings? Your Gemini key remains unchanged.'))restoreSnapshot(s);});
+ $('v5ImportBackup')?.addEventListener('click',()=>$('v5ImportBackupFile').click());
+ $('v5ImportBackupFile')?.addEventListener('change',async e=>{const f=e.target.files[0];e.target.value='';if(!f)return;
+  try {if(f.size>3*1024*1024)throw Error('Backup exceeds 3MB.');const data=JSON.parse(await f.text());
+       if(data.app!=='maya'||!Array.isArray(data.memories)||!Array.isArray(data.packs))throw Error('This is not a Maya backup.');
+       if(confirm('Import selected backup? Merge memories and restore safe settings? API key will not change.'))restoreSnapshot(data);
+  }catch(err){$('v5BackupStatus').textContent='Backup import error: '+String(err.message||err);} });
+ function automaticBackup(){const last=Number(localStorage.getItem('maya.v5backupTime')||0);
+   if(!last||Date.now()-last>24*3600*1000)save();}
+ automaticBackup();setInterval(automaticBackup,15*60*1000);
+ if(getSnap())$('v5BackupStatus').textContent='Local snapshot exists. Export it to protect against uninstall or phone loss.';
+})();
+</script>
 </body>
 </html>
