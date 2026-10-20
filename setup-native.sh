@@ -1200,3 +1200,358 @@ grep -n "maya-debug.keystore" android/app/build.gradle || true
 if ! grep -q 'android.permission.READ_CONTACTS' "$MANIFEST"; then
   sed -i 's#<application#<uses-permission android:name="android.permission.READ_CONTACTS" />\n    <application#' "$MANIFEST"
 fi
+
+# MAYA V4 ADDITIONS: opt-in screen controls and background speech (testing)
+#!/usr/bin/env bash
+# Maya V4 — opt-in, narrow, user-directed Android controls.
+# Runs after setup-native.sh, with Android project present.
+set -euo pipefail
+APP=android/app/src/main/java/com/tanim/maya
+MANIFEST=android/app/src/main/AndroidManifest.xml
+mkdir -p "$APP" android/app/src/main/res/xml
+
+cat > "$APP/MayaV4AccessService.java" <<'JAVA'
+package com.tanim.maya;
+
+import android.accessibilityservice.AccessibilityService;
+import android.accessibilityservice.GestureDescription;
+import android.graphics.Path;
+import android.os.Build;
+import android.view.accessibility.AccessibilityEvent;
+import android.view.accessibility.AccessibilityNodeInfo;
+import java.util.List;
+import java.util.Locale;
+
+public class MayaV4AccessService extends AccessibilityService {
+    static volatile MayaV4AccessService active;
+    @Override protected void onServiceConnected() { super.onServiceConnected(); active = this; }
+    @Override public void onAccessibilityEvent(AccessibilityEvent event) { /* Nothing logged or uploaded. */ }
+    @Override public void onInterrupt() {}
+    @Override public void onDestroy() { if (active == this) active = null; super.onDestroy(); }
+
+    boolean command(String cmd, String text) {
+        if ("home".equals(cmd)) return performGlobalAction(GLOBAL_ACTION_HOME);
+        if ("back".equals(cmd)) return performGlobalAction(GLOBAL_ACTION_BACK);
+        if ("lock".equals(cmd)) return Build.VERSION.SDK_INT >= 28 && performGlobalAction(GLOBAL_ACTION_LOCK_SCREEN);
+        if ("scrollup".equals(cmd)) return scroll(true);
+        if ("scrolldown".equals(cmd)) return scroll(false);
+        if ("tap".equals(cmd)) return tapNamed(text);
+        if ("firstvideo".equals(cmd)) return tapFirstVideo();
+        return false;
+    }
+    private boolean scroll(boolean up) {
+        if (Build.VERSION.SDK_INT < 24) return false;
+        android.util.DisplayMetrics dm = getResources().getDisplayMetrics();
+        float x = dm.widthPixels / 2f, h = dm.heightPixels;
+        Path path = new Path();
+        path.moveTo(x, up ? h * .30f : h * .75f);
+        path.lineTo(x, up ? h * .75f : h * .30f);
+        GestureDescription gesture = new GestureDescription.Builder()
+            .addStroke(new GestureDescription.StrokeDescription(path, 0, 450)).build();
+        return dispatchGesture(gesture, null, null);
+    }
+    private boolean click(AccessibilityNodeInfo n) {
+        for (int depth = 0; n != null && depth < 8; depth++, n = n.getParent()) {
+            if (n.isVisibleToUser() && n.isClickable() && n.performAction(AccessibilityNodeInfo.ACTION_CLICK)) return true;
+        }
+        return false;
+    }
+    private boolean tapNamed(String label) {
+        if (label == null || label.trim().length() < 2 || label.length() > 90) return false;
+        String lower = label.trim().toLowerCase(Locale.ROOT);
+        // Avoid accidental irreversible or consent-related actions.
+        if (lower.matches(".*(send|delete|purchase|pay|checkout|confirm|submit|password|install|allow|otp|transfer).*")) return false;
+        AccessibilityNodeInfo root = getRootInActiveWindow();
+        if (root == null) return false;
+        try {
+            List<AccessibilityNodeInfo> found = root.findAccessibilityNodeInfosByText(label.trim());
+            if (found == null) return false;
+            for (AccessibilityNodeInfo node : found) {
+                if (node != null && node.isVisibleToUser() && click(node)) return true;
+            }
+        } catch (Exception ignored) {}
+        return false;
+    }
+    private boolean tapFirstVideo() {
+        AccessibilityNodeInfo root = getRootInActiveWindow();
+        if (root == null || root.getPackageName() == null ||
+            !"com.google.android.youtube".contentEquals(root.getPackageName())) return false;
+        // YouTube can change its accessibility node IDs: fail safely instead of blindly tapping.
+        for (String viewId : new String[] { "com.google.android.youtube:id/video_title", "com.google.android.youtube:id/title" }) {
+            try {
+                List<AccessibilityNodeInfo> found = root.findAccessibilityNodeInfosByViewId(viewId);
+                if (found == null) continue;
+                for (AccessibilityNodeInfo node : found) {
+                    if (node == null || !node.isVisibleToUser() || node.getText() == null) continue;
+                    String title = node.getText().toString().toLowerCase(Locale.ROOT);
+                    if (title.length() < 2 || title.contains("sponsored") || title.contains("advertisement")) continue;
+                    if (click(node)) return true;
+                }
+            } catch (Exception ignored) {}
+        }
+        return false;
+    }
+}
+JAVA
+
+cat > "$APP/MayaV4VoiceService.java" <<'JAVA'
+package com.tanim.maya;
+
+import android.app.Notification;
+import android.app.NotificationChannel;
+import android.app.NotificationManager;
+import android.app.PendingIntent;
+import android.app.Service;
+import android.content.Intent;
+import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
+import android.speech.RecognitionListener;
+import android.speech.RecognizerIntent;
+import android.speech.SpeechRecognizer;
+import java.util.ArrayList;
+
+public class MayaV4VoiceService extends Service implements RecognitionListener {
+    static volatile boolean running = false;
+    private final Handler handler = new Handler(Looper.getMainLooper());
+    private SpeechRecognizer recognizer;
+    private boolean stopping = false;
+    private int errorCount = 0;
+    private final Runnable restart = () -> listen();
+
+    @Override public int onStartCommand(Intent intent, int flags, int startId) {
+        if (intent != null && "STOP".equals(intent.getAction())) { stopNow(); return START_NOT_STICKY; }
+        if (running) return START_NOT_STICKY;
+        if (android.os.Build.VERSION.SDK_INT >= 26) {
+            NotificationChannel channel = new NotificationChannel("maya_v4_voice", "Maya background voice", NotificationManager.IMPORTANCE_LOW);
+            ((NotificationManager)getSystemService(NOTIFICATION_SERVICE)).createNotificationChannel(channel);
+        }
+        Intent stop = new Intent(this, MayaV4VoiceService.class).setAction("STOP");
+        PendingIntent stopButton = PendingIntent.getService(this, 2, stop,
+            PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+        Intent launch = getPackageManager().getLaunchIntentForPackage(getPackageName());
+        PendingIntent open = launch == null ? null : PendingIntent.getActivity(this, 1, launch,
+            PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+        Notification.Builder builder = android.os.Build.VERSION.SDK_INT >= 26 ?
+            new Notification.Builder(this, "maya_v4_voice") : new Notification.Builder(this);
+        builder.setSmallIcon(android.R.drawable.ic_btn_speak_now)
+            .setContentTitle("Maya background voice controls")
+            .setContentText("Microphone active. Say Maya + command. Stop anytime.")
+            .setOngoing(true)
+            .addAction(android.R.drawable.ic_menu_close_clear_cancel, "Stop", stopButton);
+        if (open != null) builder.setContentIntent(open);
+        try { startForeground(2404, builder.build()); }
+        catch (Exception e) { stopSelf(); return START_NOT_STICKY; }
+        running = true;
+        stopping = false;
+        handler.post(restart);
+        return START_NOT_STICKY; // Never silently restart after system kills service.
+    }
+    private void destroyRecognizer() {
+        if (recognizer != null) {
+            try { recognizer.cancel(); recognizer.destroy(); } catch (Exception ignored) {}
+            recognizer = null;
+        }
+    }
+    private void listen() {
+        if (stopping || !running) return;
+        destroyRecognizer();
+        if (!SpeechRecognizer.isRecognitionAvailable(this)) { stopNow(); return; }
+        try {
+            recognizer = SpeechRecognizer.createSpeechRecognizer(this);
+            recognizer.setRecognitionListener(this);
+            Intent request = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
+            request.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
+            request.putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, false);
+            request.putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 3);
+            recognizer.startListening(request);
+        } catch (Exception e) { retry(); }
+    }
+    private void retry() {
+        destroyRecognizer();
+        if (stopping || !running) return;
+        errorCount = Math.min(errorCount + 1, 8);
+        handler.removeCallbacks(restart);
+        handler.postDelayed(restart, Math.min(6000, errorCount * 900L));
+    }
+    @Override public void onResults(Bundle data) {
+        ArrayList<String> heard = data == null ? null : data.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION);
+        if (heard != null && !heard.isEmpty()) MayaV4Controls.voiceCommand(this, heard.get(0));
+        errorCount = 0;
+        handler.removeCallbacks(restart);
+        handler.postDelayed(restart, 950);
+    }
+    @Override public void onError(int error) {
+        if (error == SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS) { stopNow(); return; }
+        retry();
+    }
+    @Override public void onReadyForSpeech(Bundle b) {}
+    @Override public void onBeginningOfSpeech() {}
+    @Override public void onRmsChanged(float v) {}
+    @Override public void onBufferReceived(byte[] b) {}
+    @Override public void onEndOfSpeech() {}
+    @Override public void onPartialResults(Bundle b) {}
+    @Override public void onEvent(int i, Bundle b) {}
+    private void stopNow() {
+        stopping = true; running = false;
+        handler.removeCallbacksAndMessages(null);
+        destroyRecognizer();
+        stopForeground(true);
+        stopSelf();
+    }
+    @Override public void onDestroy() {
+        stopping = true; running = false;
+        handler.removeCallbacksAndMessages(null);
+        destroyRecognizer();
+        super.onDestroy();
+    }
+    @Override public android.os.IBinder onBind(Intent intent) { return null; }
+}
+JAVA
+
+cat > "$APP/MayaV4Controls.java" <<'JAVA'
+package com.tanim.maya;
+
+import android.Manifest;
+import android.app.Activity;
+import android.content.Context;
+import android.content.Intent;
+import android.content.pm.PackageManager;
+import android.os.Build;
+import android.provider.Settings;
+import org.json.JSONObject;
+import java.util.Locale;
+
+public final class MayaV4Controls {
+    private MayaV4Controls() {}
+    private static String result(String status, String message) {
+        JSONObject j = new JSONObject();
+        try { j.put("status", status); j.put("message", message); } catch (Exception ignored) {}
+        return j.toString();
+    }
+    static String run(Context ctx, Activity activity, String action, JSONObject args) {
+        if ("V4_STATUS".equals(action)) return result("ok", "Accessibility " +
+            (MayaV4AccessService.active != null ? "ON" : "OFF") + ", Background mic " +
+            (MayaV4VoiceService.running ? "ON" : "OFF") + ". Start while Maya is visible.");
+        if ("V4_ACCESS_SETTINGS".equals(action)) {
+            if (activity == null) return result("error", "Settings screen is unavailable.");
+            activity.runOnUiThread(() -> {
+                try { activity.startActivity(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)); }
+                catch (Exception ignored) {}
+            });
+            return result("opened", "Enable Maya screen controls manually in Android Accessibility settings.");
+        }
+        if ("V4_VOICE_START".equals(action)) {
+            if (ctx.checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+                if (activity != null) activity.runOnUiThread(() -> activity.requestPermissions(
+                    new String[]{Manifest.permission.RECORD_AUDIO}, 2404));
+                return result("needs_permission", "Allow microphone permission, then tap Start again while Maya is visible.");
+            }
+            if (MayaV4VoiceService.running) return result("ok", "Already listening for explicit Maya commands.");
+            try {
+                Intent start = new Intent(ctx, MayaV4VoiceService.class);
+                if (Build.VERSION.SDK_INT >= 26) ctx.startForegroundService(start);
+                else ctx.startService(start);
+                return result("opened", "Background voice start requested. Check Android notification.");
+            } catch (Exception ex) {
+                return result("error", "Android blocked background microphone: " + ex.getClass().getSimpleName());
+            }
+        }
+        if ("V4_VOICE_STOP".equals(action)) {
+            ctx.stopService(new Intent(ctx, MayaV4VoiceService.class));
+            return result("ok", "Background listening stop requested.");
+        }
+        if ("V4_ACTION".equals(action)) {
+            MayaV4AccessService access = MayaV4AccessService.active;
+            if (access == null) return result("needs_permission", "Enable Maya in Android Accessibility settings.");
+            String cmd = args.optString("cmd", ""), text = args.optString("text", "");
+            boolean ok = access.command(cmd, text);
+            if (ok && "lock".equals(cmd)) ctx.stopService(new Intent(ctx, MayaV4VoiceService.class));
+            return result(ok ? "opened" : "error", ok ? "Action accepted by Android: " + cmd :
+                "Action unavailable or no matching on-screen item. Do not assume a tap happened.");
+        }
+        return result("error", "Unknown V4 action.");
+    }
+    static void voiceCommand(Context ctx, String phrase) {
+        if (phrase == null) return;
+        String all = phrase.trim().toLowerCase(Locale.ROOT);
+        String wake = null;
+        for (String prefix : new String[]{"maya", "মায়া", "মায়া", "মাইয়া", "মাইয়া"}) {
+            if (all.equals(prefix) || all.startsWith(prefix + " ")) { wake = prefix; break; }
+        }
+        if (wake == null) return;
+        String words = all.substring(wake.length()).trim();
+        if (words.contains("stop listening") || words.contains("stop maya") || words.contains("শোনা বন্ধ")) {
+            ctx.stopService(new Intent(ctx, MayaV4VoiceService.class)); return;
+        }
+        MayaV4AccessService access = MayaV4AccessService.active;
+        if (access == null) return;
+        if (words.contains("lock screen") || words.contains("lock phone") || words.contains("ফোন লক") || words.contains("স্ক্রিন লক")) {
+            if (access.command("lock", "")) ctx.stopService(new Intent(ctx, MayaV4VoiceService.class));
+        } else if (words.contains("home screen") || words.contains("go home") || words.contains("হোমপেজ") || words.contains("হোম স্ক্রিন") || words.contains("হোমে")) {
+            access.command("home", "");
+        } else if (words.contains("go back") || words.contains("back button") || words.contains("পিছনে যাও") || words.contains("ব্যাক কর")) {
+            access.command("back", "");
+        } else if (words.contains("scroll down") || words.contains("swipe up") || words.contains("নিচে স্ক্রল")) {
+            access.command("scrolldown", "");
+        } else if (words.contains("scroll up") || words.contains("swipe down") || words.contains("উপরে স্ক্রল")) {
+            access.command("scrollup", "");
+        } else if (words.contains("play first video") || words.contains("open first video") || words.contains("প্রথম ভিডিও চালাও")) {
+            access.command("firstvideo", "");
+        } else if (words.startsWith("tap ") || words.startsWith("click ")) {
+            access.command("tap", words.substring(words.indexOf(' ') + 1));
+        } else if (words.startsWith("চাপ দাও ")) {
+            access.command("tap", words.substring("চাপ দাও ".length()));
+        }
+    }
+}
+JAVA
+
+cat > android/app/src/main/res/xml/maya_v4_accessibility.xml <<'XML'
+<?xml version="1.0" encoding="utf-8"?>
+<accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
+ android:accessibilityEventTypes="typeWindowStateChanged"
+ android:accessibilityFeedbackType="feedbackGeneric"
+ android:accessibilityFlags="flagReportViewIds"
+ android:canRetrieveWindowContent="true"
+ android:canPerformGestures="true"
+ android:description="@string/app_name"
+ android:notificationTimeout="100" />
+XML
+
+# V4 Android registration; preserve all previous manifest receivers and services.
+python3 - <<'PY_V4_MERGED'
+from pathlib import Path
+manifest = Path('android/app/src/main/AndroidManifest.xml')
+s = manifest.read_text()
+for permission in ('android.permission.FOREGROUND_SERVICE', 'android.permission.FOREGROUND_SERVICE_MICROPHONE', 'android.permission.POST_NOTIFICATIONS'):
+    if permission not in s:
+        s = s.replace('<application', f'<uses-permission android:name="{permission}" />\n    <application', 1)
+services = '''
+        <service android:name="com.tanim.maya.MayaV4VoiceService"
+            android:exported="false" android:foregroundServiceType="microphone" />
+        <service android:name="com.tanim.maya.MayaV4AccessService"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE"
+            android:exported="true" android:label="Maya screen controls">
+            <intent-filter><action android:name="android.accessibilityservice.AccessibilityService" /></intent-filter>
+            <meta-data android:name="android.accessibilityservice" android:resource="@xml/maya_v4_accessibility" />
+        </service>
+'''
+if 'MayaV4AccessService' not in s:
+    assert '</application>' in s, 'Manifest layout has changed; please inspect first'
+    s=s.replace('</application>',services+'\n    </application>',1)
+# Android 11+ package visibility for platform SpeechRecognizer.
+query='<intent><action android:name="android.speech.RecognitionService" /></intent>'
+if 'android.speech.RecognitionService' not in s:
+    if '</queries>' in s: s=s.replace('</queries>',query+'</queries>',1)
+    else: s=s.replace('<application','<queries>'+query+'</queries>\n    <application',1)
+manifest.write_text(s)
+bridge=Path('android/app/src/main/java/com/tanim/maya/MayaBridge.java')
+b=bridge.read_text()
+needle='return MayaControls.run(ctx, act, action, a);'
+if 'return MayaV4Controls.run' not in b:
+    assert b.count(needle)==1, 'Native bridge changed unexpectedly; stopping patch'
+    b=b.replace(needle, 'if (action != null && action.startsWith("V4_")) return MayaV4Controls.run(ctx, act, action, a);\n            '+needle,1)
+bridge.write_text(b)
+print('Maya V4 services and permissions installed; existing V3 UI and data retained.')
+PY_V4_MERGED

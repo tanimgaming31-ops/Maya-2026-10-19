@@ -300,7 +300,15 @@ input[type=range]{width:130px;accent-color:var(--c)}
   <button class="btn pri" id="v3ChatBtn">Confirm &amp; prepare message</button>
   <div id="v3SocialResult" class="msg" aria-live="polite">No action yet. No chat sent.</div>
 
-  <h3>Phone reminders</h3>
+  
+  <h3>Maya V4 — Background voice & screen controls (Android test)</h3>
+  <p class="note">Start here while Maya is on screen. Then switch to YouTube or another app. Say "Maya go home", "Maya scroll down", "Maya go back", "Maya tap [visible text]", or "Maya lock screen". Background commands use Android speech recognition, not Gemini Live. Stop anytime from the persistent notification. Accessibility permission must be enabled manually. Some apps restrict screen control.</p>
+  <div class="krow"><button class="btn" id="v4Access">Enable Accessibility</button><button class="btn" id="v4Status">Check controls</button></div>
+  <div class="krow"><button class="btn pri" id="v4Start">Start background voice</button><button class="btn" id="v4Stop">Stop listening</button></div>
+  <div class="krow"><button class="btn" id="v4Home">Home</button><button class="btn" id="v4Back">Back</button><button class="btn" id="v4Down">Scroll down</button><button class="btn" id="v4Up">Scroll up</button></div>
+  <div class="krow"><button class="btn" id="v4FirstVideo">First YouTube video (experimental)</button><button class="btn" id="v4Lock">Lock screen</button></div>
+  <p class="msg" id="v4Result" aria-live="polite">Not tested on this device.</p>
+<h3>Phone reminders</h3>
   <p class="note">Reminders are stored only on this device, rescheduled after restart, and may arrive late in Android battery-saving mode. Notification permission is required.</p>
   <input id="v2ReminderTitle" class="inp wide" maxlength="120" placeholder="What should Maya remind you about?">
   <div class="krow"><input type="datetime-local" id="v2ReminderTime" class="inp" style="flex:1;min-width:175px"><button class="btn pri" id="v2ReminderAdd">Add reminder</button></div>
@@ -1670,5 +1678,32 @@ bindSettings(); applyTheme(); renderKey(); refreshNative(); setTimeout(refreshV2
 if (!getKey()) { showSub('Hi… I’m Maya. Add your free Gemini key in Settings, and we can talk.'); } else { showSub('Tap the mic and talk to me…'); }
 if (S.wake) setTimeout(() => Wake.sync(), 600);
 </script>
+
+<script>
+/* Maya V4 safe opt-in controls: no fake success and no automatic permissions. */
+(function(){
+  const out=document.getElementById('v4Result');
+  if(!out)return;
+  function run(action,data){
+    if(!window.MayaBridge || typeof window.MayaBridge.control!=='function'){
+      out.textContent='This feature needs the Maya Android APK. Chrome/PWA cannot control other apps.';
+      return;
+    }
+    try{
+      const r=JSON.parse(window.MayaBridge.control(action,JSON.stringify(data||{})));
+      out.textContent=(r.status||'unknown')+': '+(r.message||'No result');
+    }catch(e){out.textContent='Android bridge error: '+String(e.message||e);}
+  }
+  const btn=(id,act,data)=>{const e=document.getElementById(id);if(e)e.addEventListener('click',()=>run(act,data));};
+  btn('v4Access','V4_ACCESS_SETTINGS');btn('v4Status','V4_STATUS');
+  btn('v4Start','V4_VOICE_START');btn('v4Stop','V4_VOICE_STOP');
+  btn('v4Home','V4_ACTION',{cmd:'home'});btn('v4Back','V4_ACTION',{cmd:'back'});
+  btn('v4Down','V4_ACTION',{cmd:'scrolldown'});btn('v4Up','V4_ACTION',{cmd:'scrollup'});
+  btn('v4FirstVideo','V4_ACTION',{cmd:'firstvideo'});
+  const lock=document.getElementById('v4Lock');
+  if(lock)lock.addEventListener('click',()=>{if(confirm('Lock phone screen now?'))run('V4_ACTION',{cmd:'lock'});});
+})();
+</script>
+
 </body>
 </html>
