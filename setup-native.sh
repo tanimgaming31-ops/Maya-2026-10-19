@@ -1225,7 +1225,42 @@ import java.util.Locale;
 public class MayaV4AccessService extends AccessibilityService {
     static volatile MayaV4AccessService active;
     @Override protected void onServiceConnected() { super.onServiceConnected(); active = this; }
-    @Override public void onAccessibilityEvent(AccessibilityEvent event) { /* Nothing logged or uploaded. */ }
+    private String targetVideo="";
+    private long targetUntil=0;
+    private final android.os.Handler watchHandler=new android.os.Handler(android.os.Looper.getMainLooper());
+    void watchVideoTitle(String title){
+        targetVideo=title.trim().toLowerCase(Locale.ROOT);
+        targetUntil=android.os.SystemClock.uptimeMillis()+12000;
+        watchHandler.postDelayed(()->tryVideoTitle(),2200);
+    }
+    void clearVideoWatch(){targetVideo="";targetUntil=0;}
+    @Override public void onAccessibilityEvent(AccessibilityEvent event) {
+        // Only inspect a YouTube window after explicit user request; never collect/store screen contents.
+        if(targetVideo.length()>0 && android.os.SystemClock.uptimeMillis()<targetUntil){
+            watchHandler.removeCallbacksAndMessages(null);
+            watchHandler.postDelayed(()->tryVideoTitle(),450);
+        }
+    }
+    private void tryVideoTitle(){
+        if(targetVideo.length()==0)return;
+        if(android.os.SystemClock.uptimeMillis()>targetUntil){clearVideoWatch();return;}
+        AccessibilityNodeInfo root=getRootInActiveWindow();
+        if(root!=null && root.getPackageName()!=null &&
+            "com.google.android.youtube".contentEquals(root.getPackageName())){
+            String keyword=targetVideo;
+            try{
+                List<AccessibilityNodeInfo> matches=root.findAccessibilityNodeInfosByText(keyword);
+                if(matches!=null)for(AccessibilityNodeInfo item:matches){
+                    if(item==null || !item.isVisibleToUser() || item.getText()==null || item.isEditable())continue;
+                    String label=item.getText().toString().toLowerCase(Locale.ROOT);
+                    if(label.contains(keyword) && !label.contains("sponsored") && !label.contains("advertisement") && click(item)){
+                        clearVideoWatch();return;
+                    }
+                }
+            }catch(Exception ignored){}
+        }
+        watchHandler.postDelayed(()->tryVideoTitle(),1200);
+    }
     @Override public void onInterrupt() {}
     @Override public void onDestroy() { if (active == this) active = null; super.onDestroy(); }
 
@@ -1430,6 +1465,24 @@ public final class MayaV4Controls {
         return j.toString();
     }
     static String run(Context ctx, Activity activity, String action, JSONObject args) {
+        if ("V4_PLAY_SEARCH".equals(action)) {
+            String query=args.optString("query", "").trim();
+            if (query.length()<2 || query.length()>150) return result("error","Video title must be 2-150 characters.");
+            MayaV4AccessService access=MayaV4AccessService.active;
+            if (access==null) return result("needs_permission","Enable Maya Accessibility first, then try again.");
+            String uri="https://www.youtube.com/results?search_query="+android.net.Uri.encode(query);
+            try {
+                // A bounded, best-effort title match after YouTube opens. Never click a random result/ad.
+                access.watchVideoTitle(query);
+                Intent launch=new Intent(Intent.ACTION_VIEW,android.net.Uri.parse(uri));
+                launch.setPackage("com.google.android.youtube");
+                launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                try{ctx.startActivity(launch);}catch(Exception first){
+                    launch.setPackage(null);ctx.startActivity(launch);
+                }
+                return result("opened","YouTube search launch requested; title-matching autoplay is a best-effort attempt and is NOT verified.");
+            }catch(Exception ex){ access.clearVideoWatch();return result("error","Could not open search: "+ex.getClass().getSimpleName()); }
+        }
         if ("V4_STATUS".equals(action)) return result("ok", "Accessibility " +
             (MayaV4AccessService.active != null ? "ON" : "OFF") + ", Background mic " +
             (MayaV4VoiceService.running ? "ON" : "OFF") + ". Start while Maya is visible.");
@@ -1486,6 +1539,14 @@ public final class MayaV4Controls {
         }
         MayaV4AccessService access = MayaV4AccessService.active;
         if (access == null) return;
+        if(words.startsWith("play youtube ") || words.startsWith("youtube play ")){
+            String query=words.substring(words.indexOf(' ',words.indexOf(' ')+1)+1).trim();
+            if(query.length()>1){
+                try{run(ctx,null,"V4_PLAY_SEARCH",new JSONObject().put("query",query));}
+                catch(Exception ignored){}
+            }
+            return;
+        }
         if (words.contains("lock screen") || words.contains("lock phone") || words.contains("ফোন লক") || words.contains("স্ক্রিন লক")) {
             if (access.command("lock", "")) ctx.stopService(new Intent(ctx, MayaV4VoiceService.class));
         } else if (words.contains("home screen") || words.contains("go home") || words.contains("হোমপেজ") || words.contains("হোম স্ক্রিন") || words.contains("হোমে")) {
