@@ -2166,6 +2166,12 @@ method='''    private static String report(Context ctx) {
             out.put("status","ok");
             out.put("message","Android permission snapshot; refresh after changing Settings.");
             out.put("androidSdk",Build.VERSION.SDK_INT);
+            // Read-only runtime facts for spoken feature reports. No permission requests here.
+            out.put("backgroundVoiceRunning",MayaV4VoiceService.running);
+            out.put("notificationListenerConnected",MayaNotificationService.connected);
+            out.put("screenshotApiEligible",Build.VERSION.SDK_INT>=30 && MayaV4AccessService.active!=null);
+            out.put("smsAllowed",ctx.checkSelfPermission(Manifest.permission.SEND_SMS)==PackageManager.PERMISSION_GRANTED);
+            out.put("brightnessWriteAllowed",Build.VERSION.SDK_INT>=23 && Settings.System.canWrite(ctx));
             out.put("mic",ctx.checkSelfPermission(Manifest.permission.RECORD_AUDIO)==PackageManager.PERMISSION_GRANTED);
             out.put("camera",ctx.checkSelfPermission(Manifest.permission.CAMERA)==PackageManager.PERMISSION_GRANTED);
             out.put("contacts",ctx.checkSelfPermission(Manifest.permission.READ_CONTACTS)==PackageManager.PERMISSION_GRANTED);
