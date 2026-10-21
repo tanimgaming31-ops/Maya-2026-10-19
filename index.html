@@ -344,6 +344,11 @@ input[type=range]{width:130px;accent-color:var(--c)}
   <input id="v62Name" class="inp" style="flex:1;min-width:120px" maxlength="70" placeholder="Saved name or search phrase"></div>
   <div class="krow"><button id="v62Open" class="btn pri">Open app &amp; search</button><button id="v62Check" class="btn">Check search result</button><button id="v62Cancel" class="btn">Cancel search</button></div>
   <p class="note" id="v62Status" aria-live="polite">Search not started. Confirm the recipient before sending any message.</p>
+  <h3>Maya V6.3 — Clone WhatsApp, Charge &amp; Selfie checks</h3>
+  <p class="note">Clone WhatsApp is launched only when Android exposes a separate clone/work profile. Otherwise Maya reports that it cannot open it; the original WhatsApp is not opened instead. Selfie opens the front camera *request*; you tap the shutter.</p>
+  <div class="krow"><button id="v63Clone" class="btn">Open Clone WhatsApp</button><button id="v63Battery" class="btn">Check battery &amp; charging</button></div>
+  <div class="krow"><button id="v63Selfie" class="btn">Open front selfie camera</button><button id="v63Shot" class="btn">Test screenshot</button></div>
+  <p id="v63Status" class="msg" role="status" aria-live="polite">Not tested on this device. Say “চার্জ কত”, “স্ক্রিনশট নাও”, “Clone WhatsApp খোলো”, or “সেলফি ক্যামেরা খোলো”.</p>
   <h3>Smart WhatsApp contact finder & safe routines</h3>
   <div class="krow"><input id="v52ContactName" class="inp" style="flex:1;min-width:140px" maxlength="70" placeholder="Name or part of saved contact name"/><button class="btn" id="v52FindContact">Find saved contact</button></div>
   <textarea id="v52ContactMessage" class="inp wide" rows="2" maxlength="500" placeholder="Message draft — you must tap Send yourself"></textarea>
@@ -428,9 +433,9 @@ input[type=range]{width:130px;accent-color:var(--c)}
 //#LOGIC-START
 /* ================= Pure logic (no DOM) — unit-tested ================= */
 const PHASE1 = ['OPEN_APP','OPEN_SETTINGS','START_TIMER','CREATE_ALARM','CREATE_CALENDAR_EVENT','CALL_CONTACT','PREPARE_SMS','PREPARE_WHATSAPP_MESSAGE','PREPARE_MESSENGER_MESSAGE','PREPARE_IMO_MESSAGE','OPEN_MAPS','START_NAVIGATION','WEB_SEARCH','YOUTUBE_SEARCH','FACEBOOK_SEARCH','SOCIAL_SEARCH','OPEN_CAMERA','OPEN_GALLERY','STOP_SPEAKING','CANCEL_PENDING_ACTION'];
-const PHASE2 = new Set(['CREATE_REMINDER','CHANGE_BRIGHTNESS','FLASHLIGHT_ON','FLASHLIGHT_OFF','MEDIA_PLAY','MEDIA_PAUSE','MEDIA_NEXT','MEDIA_PREVIOUS','CHANGE_MEDIA_VOLUME','READ_NOTIFICATION','START_BACKGROUND_MODE','STOP_BACKGROUND_MODE','SEND_SMS','SEND_WHATSAPP_MESSAGE','REPLY_NOTIFICATION','PREPARE_CHAT_CONTACT','SCREEN_ACTION','YOUTUBE_PLAY','SOCIAL_CHAT_OPEN','SOCIAL_INAPP_SEARCH','SCREENSHOT_CAPTURE']);
+const PHASE2 = new Set(['CREATE_REMINDER','CHANGE_BRIGHTNESS','FLASHLIGHT_ON','FLASHLIGHT_OFF','MEDIA_PLAY','MEDIA_PAUSE','MEDIA_NEXT','MEDIA_PREVIOUS','CHANGE_MEDIA_VOLUME','READ_NOTIFICATION','START_BACKGROUND_MODE','STOP_BACKGROUND_MODE','SEND_SMS','SEND_WHATSAPP_MESSAGE','REPLY_NOTIFICATION','PREPARE_CHAT_CONTACT','SCREEN_ACTION','YOUTUBE_PLAY','SOCIAL_CHAT_OPEN','SOCIAL_INAPP_SEARCH','SCREENSHOT_CAPTURE','BATTERY_STATUS','OPEN_CLONE_WHATSAPP','TAKE_SELFIE']);
 const RISKY = new Set(['CALL_CONTACT','PREPARE_SMS','PREPARE_WHATSAPP_MESSAGE','PREPARE_MESSENGER_MESSAGE','PREPARE_IMO_MESSAGE','CREATE_CALENDAR_EVENT','CREATE_ALARM','START_TIMER','CREATE_REMINDER','REPLY_NOTIFICATION','SEND_SMS','PREPARE_CHAT_CONTACT']);
-const NATIVE_ACTIONS = ['CREATE_REMINDER','READ_NOTIFICATION','REPLY_NOTIFICATION','FLASHLIGHT_ON','FLASHLIGHT_OFF','MEDIA_PLAY','MEDIA_PAUSE','MEDIA_NEXT','MEDIA_PREVIOUS','CHANGE_MEDIA_VOLUME','CHANGE_BRIGHTNESS','SEND_SMS','PREPARE_CHAT_CONTACT','SCREEN_ACTION','YOUTUBE_PLAY','SOCIAL_CHAT_OPEN','SOCIAL_INAPP_SEARCH','SCREENSHOT_CAPTURE'];
+const NATIVE_ACTIONS = ['CREATE_REMINDER','READ_NOTIFICATION','REPLY_NOTIFICATION','FLASHLIGHT_ON','FLASHLIGHT_OFF','MEDIA_PLAY','MEDIA_PAUSE','MEDIA_NEXT','MEDIA_PREVIOUS','CHANGE_MEDIA_VOLUME','CHANGE_BRIGHTNESS','SEND_SMS','PREPARE_CHAT_CONTACT','SCREEN_ACTION','YOUTUBE_PLAY','SOCIAL_CHAT_OPEN','SOCIAL_INAPP_SEARCH','SCREENSHOT_CAPTURE','BATTERY_STATUS','OPEN_CLONE_WHATSAPP','TAKE_SELFIE'];
 const enc = encodeURIComponent;
 const pad = n => String(n).padStart(2, '0');
 const fmt12 = (h, m) => ((h % 12) || 12) + ':' + pad(m) + ' ' + (h >= 12 ? 'PM' : 'AM');
@@ -681,7 +686,7 @@ function validateAction(args, now, enabled) {
       if(p.query.length<2)return fail('Say what to search for.');
       break;
     }
-    case 'SCREENSHOT_CAPTURE': break;
+    case 'BATTERY_STATUS': case 'OPEN_CLONE_WHATSAPP': case 'TAKE_SELFIE': case 'SCREENSHOT_CAPTURE': break;
     case 'SOCIAL_SEARCH': {
       p.app = str(args.app, 24).toLowerCase();
       if (!['youtube','facebook','tiktok','instagram'].includes(p.app)) return fail('Select YouTube, Facebook, TikTok, or Instagram.');
@@ -738,6 +743,9 @@ function planAction(action, p, now) {
     case 'SOCIAL_CHAT_OPEN': return {kind:'native-social-open',app:p.app,query:p.contact_name};
     case 'SOCIAL_INAPP_SEARCH': return {kind:'native-social-open',app:p.app,query:p.query};
     case 'SCREENSHOT_CAPTURE': return {kind:'native-screenshot-once'};
+    case 'BATTERY_STATUS': return {kind:'native-v63',action:'V63_BATTERY_STATUS'};
+    case 'OPEN_CLONE_WHATSAPP': return {kind:'native-v63',action:'V63_CLONE_WHATSAPP'};
+    case 'TAKE_SELFIE': return {kind:'native-v63',action:'V63_SELFIE_CAMERA'};
     case 'SOCIAL_SEARCH': {
       const lookup = {
         youtube:{url:'https://www.youtube.com/results?search_query='+enc(p.query),pkg:'com.google.android.youtube',name:'YouTube'},
@@ -846,7 +854,10 @@ TOOLS
 - You DO have tools for real search requests: SOCIAL_SEARCH opens YouTube, Facebook people search, TikTok search, or Instagram profile results (Instagram uses Google site-search fallback). Use it with app and query instead of claiming all in-app searching is impossible. These intents open a search page; they do NOT prove search results appeared inside a particular app.
 - SOCIAL_CHAT_OPEN (native Android only): for "IMO-তে Rahim খোঁজো", "Messenger-এ Ayesha-র chat খোলো", or WhatsApp contact by visible name, use app=imo|messenger|whatsapp and contact_name. This launches the installed app, finds a visible Search control and types the name using optional Accessibility. Only a unique, exact visible match is automatically tapped. It does NOT send a message, verify the account identity or see hidden contacts. If the app changes UI or names are ambiguous, ask the person to select the right result manually.
 - SOCIAL_INAPP_SEARCH (native): TikTok/YouTube/Facebook search INSIDE the installed app using visible Accessibility controls. Do not claim results opened until the person confirms. Never silently use Google as a fallback for TikTok if the installed app is missing.
-- SCREENSHOT_CAPTURE (native): only on explicit request, capture one screenshot on device, never upload it automatically. A successful "pending" only means the request started; use the image reader after explicit consent to analyze the screenshot.
+- SCREENSHOT_CAPTURE (native): if the user explicitly says স্ক্রিনশট নাও / take a screenshot, call SCREENSHOT_CAPTURE. The action waits for Android's actual screenshot callback and reports a success only when the pixels were captured in the app. The result remains on device, NOT necessarily in Gallery, and is not sent to Gemini.
+- BATTERY_STATUS (native): for ব্যাটারি কত, চার্জ কত, ফোন চার্জ হচ্ছে কি, battery level or charging status, call BATTERY_STATUS and speak the percentage and whether currently plugged in/charging. Do not confuse this with charging the phone remotely.
+- OPEN_CLONE_WHATSAPP (native): for দ্বিতীয় WhatsApp, Clone WhatsApp, cloned WhatsApp খুলে দাও, call OPEN_CLONE_WHATSAPP. Android may hide clone profiles from ordinary apps; report inability accurately. Never substitute original WhatsApp silently.
+- TAKE_SELFIE (native): for আমার সেলফি তুলো / open selfie camera, call TAKE_SELFIE. This opens the phone camera requesting front lens; user must press shutter. Do NOT say selfie was already captured or automatically saved; Android camera apps may ignore front-lens requests.
 - "Tap this" without the name of a visible button is ambiguous. Ask what text is on the button, or use a consensual screen reader. SCREEN_ACTION tap requires a specific label, and never send/pay/delete/approve anything through generic tap.
 - IMO, Messenger and WhatsApp do NOT have a universal reliable unattended auto-send API here. You can prepare messages, help open the intended chat and use authorized notification replies after confirmation, but ordinary app chat Send remains a user action. Never claim a draft was sent.
 - For a specific YouTube video, YOUTUBE_PLAY (native Android only) opens results and attempts a visible title match through optional Accessibility. Report that playback is attempted, not guaranteed. If a result is ambiguous, ask them to choose. Do not say you watched or played it unless verified.
@@ -877,8 +888,8 @@ function toolDeclarations(native) {
     { name:'getFeatureReport', description:'READ-ONLY: generate Maya installed app feature inventory and current Android permission states, in Bengali. Call this first for user questions about all features, what is working, incomplete, unsupported, available permissions, or self-diagnostics. This does NOT exercise actions or prove end-to-end operation.', parameters:{ type:'OBJECT', properties:{ } } },
     { name:'androidAction', description:'Do one safe phone action from a fixed list. Risky ones need confirmed=false first, then confirmed=true with the token.', parameters:{ type:'OBJECT', properties:{
       action:S('The action name.', { enum:native ? PHASE1.concat(NATIVE_ACTIONS) : PHASE1 }),
-      app:S('OPEN_APP / PREPARE_CHAT_CONTACT app name; SOCIAL_CHAT_OPEN app=imo|messenger|whatsapp; SOCIAL_INAPP_SEARCH app=tiktok|youtube|facebook; SOCIAL_SEARCH app=youtube|facebook|tiktok|instagram.'),
-      setting:S('OPEN_SETTINGS: main, wifi, bluetooth, battery, display, storage, hotspot, accessibility, notifications, dnd.'),
+      app:S('OPEN_APP / PREPARE_CHAT_CONTACT app name. For cloned WhatsApp use OPEN_CLONE_WHATSAPP, not OPEN_APP. SOCIAL_CHAT_OPEN app=imo|messenger|whatsapp; SOCIAL_INAPP_SEARCH app=tiktok|youtube|facebook; SOCIAL_SEARCH app=youtube|facebook|tiktok|instagram.'),
+      setting:S('OPEN_SETTINGS: main, wifi, bluetooth, battery, display, storage, hotspot, accessibility, notifications, dnd. For battery percentage use BATTERY_STATUS instead.'),
       seconds:{ type:'INTEGER', description:'START_TIMER: duration in seconds.' },
       label:S('Optional label for a timer or alarm.'),
       hour24:{ type:'INTEGER', description:'CREATE_ALARM / CREATE_CALENDAR_EVENT: hour, 0-23.' },
@@ -1203,6 +1214,22 @@ async function handleToolCall(tc) {
 
 /* ---- Tools ---- */
 // Maya V7: read-only, source-aware status report. A status of "code present" is NOT a passed device test.
+function mayaDirectPhoneCommand(value) {
+ const t=String(value||'').trim().toLowerCase();
+ if(!t || t.length>180) return '';
+ if(isMayaBatteryQuestion(t))return 'BATTERY_STATUS';
+ const wantsAction=/(নাও|নিয়ো|নে[ও]?|তুলো|খোলো|ওপেন|open|take|capture|করো|দাও|লও|لو|खोल|ले लो)/i.test(t);
+ if(!wantsAction)return '';
+ if(/(clone|cloned|ক্লোন|দ্বিতীয়|দ্বিতীয়|second|dual)/i.test(t) && /(whatsapp|হোয়াটসঅ্যাপ|হোয়াটসঅ্যাপ|হোয়াটস্যাপ)/i.test(t))return 'OPEN_CLONE_WHATSAPP';
+ if(/(স্ক্রিনশট|স্ক্রিন শট|screenshot|screen shot)/i.test(t))return 'SCREENSHOT_CAPTURE';
+ if(/(সেলফি|selfie|सेल्फी)/i.test(t))return 'TAKE_SELFIE';
+ return '';
+}
+function isMayaBatteryQuestion(value) {
+ const t=String(value||'').trim().toLowerCase();
+ return t.length<160 && (/(ব্যাটারি|চার্জ|charging|battery|চার্জিং)/i.test(t)) &&
+ (/(কত|কতো|আছে|হচ্ছে|দেখাও|বলো|বল|status|level|percent|%|is it|how much|how many)/i.test(t));
+}
 function isMayaFeatureReportQuestion(value) {
   const t=String(value||'').trim().toLowerCase();
   if(!t||t.length>420)return false;
@@ -1324,7 +1351,29 @@ async function runPlan(action, p) {
         : r;
     }
     case 'native-social-open': return await nativeControl('V62_OPEN_SEARCH',{app:plan.app,query:plan.query});
-    case 'native-screenshot-once': return await nativeControl('V52_SCREENSHOT_START',{});
+    case 'native-screenshot-once': {
+      if(!hasNative())return {status:'unsupported',reason:'Screenshot requires the Android APK.'};
+      const started=await nativeControl('V52_SCREENSHOT_START',{});
+      if(started.status!=='pending')return started;
+      for(let tries=0;tries<24;tries++){
+        await sleep(300);
+        let result={};
+        try{result=JSON.parse(window.MayaBridge.control('V52_SCREENSHOT_RESULT','{}'));}
+        catch(err){return {status:'error',reason:'Screenshot result could not be read.'};}
+        if(result.status==='pending')continue;
+        if(result.status==='ready'&&result.data){
+          window.mayaVoiceScreenshotData=result.data;
+          const preview=document.getElementById('v52Preview');
+          if(preview){preview.src='data:image/jpeg;base64,'+result.data;preview.style.display='block';}
+          const st=document.getElementById('v52Status');
+          if(st)st.textContent='Screenshot captured locally. Open Settings → V5.2 → Use image in AI photo reader.';
+          return {status:'ok',note:'Screenshot captured in Maya memory, not yet saved in Gallery or uploaded. Use AI photo reader to view or analyze it after permission.'};
+        }
+        return {status:result.status||'error',reason:result.message||'Screenshot capture failed.'};
+      }
+      return {status:'not_verified',reason:'Screenshot did not finish within 7 seconds. Check Accessibility screenshot permission.'};
+    }
+    case 'native-v63': return await nativeControl(plan.action,{});
     case 'native-screen-action': return await nativeControl('V4_ACTION',{cmd:plan.cmd,text:plan.text});
     case 'native-video-play': return await nativeControl('V4_PLAY_SEARCH',{query:plan.query});
     case 'native-reminder': {
@@ -1444,6 +1493,12 @@ const FB = {
   async handle(text) {
     this.busy = true; setState('thinking'); gate.noteUser(text); app.transcript.push({ r:'user', t:text }); const g = gate.afterUtterance(text); if (g === 'declined' || g === 'topic_changed') hidePending();
     if(isMayaFeatureReportQuestion(text)) {const report=await collectMayaFeatureReport();showMayaFeatureReport(report,true);await this.speak(mayaFeatureReportSummary());this.busy=false;if(this.active)this.listen();return;}
+    const direct=mayaDirectPhoneCommand(text);
+    if(direct && hasNative()) {
+      const r=await runPlan(direct,{});
+      await this.speak(r.note||r.reason||'এই কাজটির ফলাফল পাওয়া যায়নি।');
+      this.busy=false;if(this.active)this.listen();return;
+    }
     this.hist.push({ role:'user', parts:[{ text }] }); if (this.hist.length > 30) this.hist = this.hist.slice(-24);
     try { const reply = await this.turn(); if (!this.active) return; if (reply) { app.transcript.push({ r:'maya', t:reply }); await this.speak(reply); } }
     catch (e) { if (e.fatal) { endCall(true); showError(e.kind, e.message); return; } toast(e.message || 'Something went wrong.', 'err', 4500); }
@@ -1510,6 +1565,11 @@ function endCall(silent) {
 async function sendTyped() {
   const t = $('#txt').value.trim(); if (!t) return; $('#txt').value = '';
   if(isMayaFeatureReportQuestion(t)) { showYou(t); const report=await collectMayaFeatureReport(); showMayaFeatureReport(report,true); showSub(mayaFeatureReportSummary());return; }
+  const direct=mayaDirectPhoneCommand(t);
+  if(direct && hasNative()){
+    showYou(t);const r=await runPlan(direct,{});
+    showSub(r.note||r.reason||'Phone action unavailable.');return;
+  }
   if (!getKey()) { showError('nokey', 'Add your free Gemini key to start.'); return; }
   showYou(t);
   if (app.active && app.mode === 'live') { flushUser(); app.userBuf = t; app.modelStarted = false; flushUser(); Live.text(t); setState('thinking'); return; }
@@ -2149,6 +2209,7 @@ $5('v6BundledModel')?.addEventListener('click',async()=>{
    if(r.status==='pending')poll();
  });
  g('v52UseScreenshot')?.addEventListener('click',()=>{
+   if(!screenshotBase64 && window.mayaVoiceScreenshotData){screenshotBase64=window.mayaVoiceScreenshotData;window.mayaVoiceScreenshotData=null;}
    if(!screenshotBase64){ // the floating shortcut may have captured a screen before Maya was opened
      const r=call('V52_SCREENSHOT_RESULT');
      if(r.status==='ready'&&r.data)screenshotBase64=r.data;
@@ -2294,5 +2355,33 @@ $('v62Check').addEventListener('click',poll);
 $('v62Cancel').addEventListener('click',()=>{clearTimeout(timer);show(call('V62_CANCEL'));});
 })();
 </script>
+
+<script>
+/* V6.3 manual checks: show real native response, never claim success from a button press alone. */
+(()=>{
+ const e=id=>document.getElementById(id);
+ const status=e('v63Status');
+ async function use(action){
+  if(!window.MayaBridge?.control){status.textContent='Unavailable in web/PWA. Install Maya APK.';return;}
+  let r;try{r=JSON.parse(window.MayaBridge.control(action,'{}'));}
+  catch(err){status.textContent='Native bridge error: '+String(err.message||err);return;}
+  status.textContent=(r.status||'unknown')+': '+(r.message||'No result returned');
+  if(action==='V52_SCREENSHOT_START' && r.status==='pending'){
+   for(let n=0;n<24;n++){await new Promise(ok=>setTimeout(ok,300));
+    try{r=JSON.parse(window.MayaBridge.control('V52_SCREENSHOT_RESULT','{}'));}catch(_){break;}
+    if(r.status==='pending')continue;
+    if(r.status==='ready'&&r.data){window.mayaVoiceScreenshotData=r.data;status.textContent='Screenshot captured in Maya memory. Tap Use image in AI photo reader above.';}
+    else status.textContent=(r.status||'error')+': '+(r.message||'Capture failed');
+    break;
+   }
+  }
+ }
+ e('v63Clone')?.addEventListener('click',()=>use('V63_CLONE_WHATSAPP'));
+ e('v63Battery')?.addEventListener('click',()=>use('V63_BATTERY_STATUS'));
+ e('v63Selfie')?.addEventListener('click',()=>use('V63_SELFIE_CAMERA'));
+ e('v63Shot')?.addEventListener('click',()=>use('V52_SCREENSHOT_START'));
+})();
+</script>
+
 </body>
 </html>

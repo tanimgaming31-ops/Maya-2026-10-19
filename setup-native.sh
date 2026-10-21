@@ -2467,3 +2467,101 @@ voice.write_text(s)
 print('Maya V6.2 in-app search and explicit voice screenshot/tap patched.')
 
 PY_V62_MERGE
+
+# MAYA V6.3 — device-status, cloned WhatsApp profile probe and front camera handoff.
+# This is best-effort Android platform integration; it never pretends an inaccessible clone profile is opened.
+cat > "$APP_DIR/MayaV63Tools.java" <<'JAVA_V63'
+package com.tanim.maya;
+
+import android.app.Activity;
+import android.content.Context;
+import android.content.Intent;
+import android.content.ComponentName;
+import android.content.pm.LauncherApps;
+import android.content.pm.LauncherActivityInfo;
+import android.os.Process;
+import android.os.UserHandle;
+import android.provider.MediaStore;
+import org.json.JSONObject;
+import java.util.ArrayList;
+import java.util.List;
+
+public final class MayaV63Tools {
+    private MayaV63Tools() {}
+    private static String reply(String status,String msg){
+        JSONObject o=new JSONObject();
+        try{o.put("status",status);o.put("message",msg);}catch(Exception ignored){}
+        return o.toString();
+    }
+    public static String run(Context ctx, Activity activity, String action){
+        if ("V63_BATTERY_STATUS".equals(action)) {
+            try {
+                JSONObject status=new JSONObject(MayaAutomations.run(ctx,activity,"AUTOMATION_STATUS",new JSONObject()));
+                int percent=status.optInt("batteryPercent",-1);
+                if(percent<0)return reply("error","Android did not return a battery percentage.");
+                String charge=status.optBoolean("charging",false)?"charging now":"not charging now";
+                return reply("ok","Battery is "+percent+" percent and the phone is "+charge+".");
+            }catch(Exception e){return reply("error","Battery information could not be read.");}
+        }
+        if ("V63_CLONE_WHATSAPP".equals(action))return openCloneWhatsApp(ctx);
+        if ("V63_SELFIE_CAMERA".equals(action))return selfieCamera(ctx);
+        return reply("error","Unknown V6.3 action.");
+    }
+    private static String openCloneWhatsApp(Context ctx){
+        try{
+            LauncherApps apps=(LauncherApps)ctx.getSystemService(Context.LAUNCHER_APPS_SERVICE);
+            if(apps==null)return reply("not_available","Android LauncherApps service unavailable. Open the cloned WhatsApp manually.");
+            UserHandle me=Process.myUserHandle();
+            List<UserHandle> profiles=apps.getProfiles();
+            ArrayList<LauncherActivityInfo> found=new ArrayList<>();
+            ArrayList<UserHandle> users=new ArrayList<>();
+            for(UserHandle profile:profiles){
+                if(profile.equals(me))continue; // never silently open original WhatsApp
+                try{
+                    List<LauncherActivityInfo> entries=apps.getActivityList("com.whatsapp",profile);
+                    if(entries!=null)for(LauncherActivityInfo entry:entries){
+                        found.add(entry);users.add(profile);
+                    }
+                }catch(SecurityException ignored){} // inaccessible work/clone profile
+            }
+            if(found.size()==0)return reply("not_available",
+                "Android did not expose the cloned WhatsApp profile to Maya. The original app was NOT opened. " +
+                "Some phone clone/work profiles cannot be launched by third-party apps.");
+            if(found.size()>1)return reply("needs_choice",
+                "More than one secondary-profile WhatsApp launcher was found. Open the correct clone manually to avoid guessing.");
+            ComponentName component=found.get(0).getComponentName();
+            apps.startMainActivity(component,users.get(0),null,null);
+            return reply("opened_unverified",
+                "Requested cloned WhatsApp from Android secondary profile. Check which WhatsApp appeared; not yet verified.");
+        }catch(SecurityException ex){
+            return reply("not_available","Android denied access to the cloned WhatsApp profile. It may only open from your launcher.");
+        }catch(Exception ex){
+            return reply("error","Could not open cloned WhatsApp: "+ex.getClass().getSimpleName());
+        }
+    }
+    private static String selfieCamera(Context ctx){
+        try {
+            Intent intent=new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
+            // Standard and vendor-supported best-effort requests; OEM camera may ignore them.
+            intent.putExtra("android.intent.extras.CAMERA_FACING",1);
+            intent.putExtra("android.intent.extra.USE_FRONT_CAMERA",true);
+            intent.putExtra("android.intent.extra.camera_facing",1);
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            ctx.startActivity(intent);
+            return reply("opened_unverified",
+                "Camera requested with front lens. Check the lens and tap the shutter yourself. Maya has NOT automatically taken or saved a selfie.");
+        }catch(Exception ex){return reply("error","Could not open the selfie camera: "+ex.getClass().getSimpleName());}
+    }
+}
+JAVA_V63
+
+python3 - <<'PY_V63_MERGE'
+from pathlib import Path
+bridge=Path('android/app/src/main/java/com/tanim/maya/MayaBridge.java')
+s=bridge.read_text()
+needle='return MayaControls.run(ctx, act, action, a);'
+assert s.count(needle)==1
+s=s.replace(needle,'if (action != null && action.startsWith("V63_")) return MayaV63Tools.run(ctx,act,action);\n            '+needle,1)
+bridge.write_text(s)
+print('Maya V6.3 registered: battery status, clone WhatsApp probe, front-camera handoff.')
+PY_V63_MERGE
