@@ -6,7 +6,7 @@
 <meta name="theme-color" content="#020205">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>Maya V6 — Voice Companion</title>
+<title>Maya V6.2 — Voice Companion</title>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon-192.png">
 <link rel="apple-touch-icon" href="icon-192.png">
@@ -338,6 +338,12 @@ input[type=range]{width:130px;accent-color:var(--c)}
   <div class="krow"><button class="btn pri" id="v52Screenshot">Capture screen once</button><button class="btn" id="v52UseScreenshot">Use image in AI photo reader</button></div>
   <img id="v52Preview" alt="Screenshot captured on this device" style="display:none;max-width:100%;max-height:230px;object-fit:contain;border-radius:12px" />
   <p class="note">Take a screenshot from the floating shortcut while the other app is open, or capture the current app screen here. The selected screenshot is NOT uploaded unless you confirm analysis in the existing AI photo reader.</p>
+  <h3>Maya V6.2 — Search inside installed apps (experimental)</h3>
+  <p class="note">Android APK + Maya Accessibility required. Exact unique names can be tapped; ambiguous names stay on the results screen. No automatic message sending. App UI updates may break search.</p>
+  <div class="krow"><select id="v62App" class="inp"><option value="imo">IMO</option><option value="messenger">Messenger</option><option value="whatsapp">WhatsApp</option><option value="tiktok">TikTok</option><option value="youtube">YouTube</option><option value="facebook">Facebook</option></select>
+  <input id="v62Name" class="inp" style="flex:1;min-width:120px" maxlength="70" placeholder="Saved name or search phrase"></div>
+  <div class="krow"><button id="v62Open" class="btn pri">Open app &amp; search</button><button id="v62Check" class="btn">Check search result</button><button id="v62Cancel" class="btn">Cancel search</button></div>
+  <p class="note" id="v62Status" aria-live="polite">Search not started. Confirm the recipient before sending any message.</p>
   <h3>Smart WhatsApp contact finder & safe routines</h3>
   <div class="krow"><input id="v52ContactName" class="inp" style="flex:1;min-width:140px" maxlength="70" placeholder="Name or part of saved contact name"/><button class="btn" id="v52FindContact">Find saved contact</button></div>
   <textarea id="v52ContactMessage" class="inp wide" rows="2" maxlength="500" placeholder="Message draft — you must tap Send yourself"></textarea>
@@ -422,9 +428,9 @@ input[type=range]{width:130px;accent-color:var(--c)}
 //#LOGIC-START
 /* ================= Pure logic (no DOM) — unit-tested ================= */
 const PHASE1 = ['OPEN_APP','OPEN_SETTINGS','START_TIMER','CREATE_ALARM','CREATE_CALENDAR_EVENT','CALL_CONTACT','PREPARE_SMS','PREPARE_WHATSAPP_MESSAGE','PREPARE_MESSENGER_MESSAGE','PREPARE_IMO_MESSAGE','OPEN_MAPS','START_NAVIGATION','WEB_SEARCH','YOUTUBE_SEARCH','FACEBOOK_SEARCH','SOCIAL_SEARCH','OPEN_CAMERA','OPEN_GALLERY','STOP_SPEAKING','CANCEL_PENDING_ACTION'];
-const PHASE2 = new Set(['CREATE_REMINDER','CHANGE_BRIGHTNESS','FLASHLIGHT_ON','FLASHLIGHT_OFF','MEDIA_PLAY','MEDIA_PAUSE','MEDIA_NEXT','MEDIA_PREVIOUS','CHANGE_MEDIA_VOLUME','READ_NOTIFICATION','START_BACKGROUND_MODE','STOP_BACKGROUND_MODE','SEND_SMS','SEND_WHATSAPP_MESSAGE','REPLY_NOTIFICATION','PREPARE_CHAT_CONTACT','SCREEN_ACTION','YOUTUBE_PLAY']);
+const PHASE2 = new Set(['CREATE_REMINDER','CHANGE_BRIGHTNESS','FLASHLIGHT_ON','FLASHLIGHT_OFF','MEDIA_PLAY','MEDIA_PAUSE','MEDIA_NEXT','MEDIA_PREVIOUS','CHANGE_MEDIA_VOLUME','READ_NOTIFICATION','START_BACKGROUND_MODE','STOP_BACKGROUND_MODE','SEND_SMS','SEND_WHATSAPP_MESSAGE','REPLY_NOTIFICATION','PREPARE_CHAT_CONTACT','SCREEN_ACTION','YOUTUBE_PLAY','SOCIAL_CHAT_OPEN','SOCIAL_INAPP_SEARCH','SCREENSHOT_CAPTURE']);
 const RISKY = new Set(['CALL_CONTACT','PREPARE_SMS','PREPARE_WHATSAPP_MESSAGE','PREPARE_MESSENGER_MESSAGE','PREPARE_IMO_MESSAGE','CREATE_CALENDAR_EVENT','CREATE_ALARM','START_TIMER','CREATE_REMINDER','REPLY_NOTIFICATION','SEND_SMS','PREPARE_CHAT_CONTACT']);
-const NATIVE_ACTIONS = ['CREATE_REMINDER','READ_NOTIFICATION','REPLY_NOTIFICATION','FLASHLIGHT_ON','FLASHLIGHT_OFF','MEDIA_PLAY','MEDIA_PAUSE','MEDIA_NEXT','MEDIA_PREVIOUS','CHANGE_MEDIA_VOLUME','CHANGE_BRIGHTNESS','SEND_SMS','PREPARE_CHAT_CONTACT','SCREEN_ACTION','YOUTUBE_PLAY'];
+const NATIVE_ACTIONS = ['CREATE_REMINDER','READ_NOTIFICATION','REPLY_NOTIFICATION','FLASHLIGHT_ON','FLASHLIGHT_OFF','MEDIA_PLAY','MEDIA_PAUSE','MEDIA_NEXT','MEDIA_PREVIOUS','CHANGE_MEDIA_VOLUME','CHANGE_BRIGHTNESS','SEND_SMS','PREPARE_CHAT_CONTACT','SCREEN_ACTION','YOUTUBE_PLAY','SOCIAL_CHAT_OPEN','SOCIAL_INAPP_SEARCH','SCREENSHOT_CAPTURE'];
 const enc = encodeURIComponent;
 const pad = n => String(n).padStart(2, '0');
 const fmt12 = (h, m) => ((h % 12) || 12) + ':' + pad(m) + ' ' + (h >= 12 ? 'PM' : 'AM');
@@ -661,6 +667,21 @@ function validateAction(args, now, enabled) {
     case 'READ_NOTIFICATION': { const l = args.limit == null ? 5 : Number(args.limit); if (!Number.isInteger(l) || l < 1 || l > 10) return fail('limit must be a whole number from 1 to 10.'); p.limit = l; p.app = str(args.app, 20); break; }
     case 'REPLY_NOTIFICATION': p.notification_id = str(args.notification_id, 40); p.message = str(args.message, 500);
       if (!p.notification_id) return fail('notification_id is required (take it from READ_NOTIFICATION).'); if (!p.message) return fail('message is required: the exact reply text the person dictated.'); break;
+    case 'SOCIAL_CHAT_OPEN': {
+      p.app=str(args.app,20).toLowerCase();
+      if(!['imo','messenger','whatsapp'].includes(p.app))return fail('Choose IMO, Messenger or WhatsApp.');
+      p.contact_name=str(args.contact_name,70);
+      if(p.contact_name.length<2)return fail('Say a person name of at least 2 characters.');
+      break;
+    }
+    case 'SOCIAL_INAPP_SEARCH': {
+      p.app=str(args.app,20).toLowerCase();
+      if(!['tiktok','youtube','facebook'].includes(p.app))return fail('Choose TikTok, YouTube or Facebook.');
+      p.query=str(args.query,70);
+      if(p.query.length<2)return fail('Say what to search for.');
+      break;
+    }
+    case 'SCREENSHOT_CAPTURE': break;
     case 'SOCIAL_SEARCH': {
       p.app = str(args.app, 24).toLowerCase();
       if (!['youtube','facebook','tiktok','instagram'].includes(p.app)) return fail('Select YouTube, Facebook, TikTok, or Instagram.');
@@ -714,6 +735,9 @@ function planAction(action, p, now) {
     case 'OPEN_MAPS': { const u = 'https://www.google.com/maps/search/?api=1&query=' + enc(p.query); return { kind:'link', href:appIntent(u, 'com.google.android.apps.maps'), label:'Open Maps', native:{ action:'OPEN_URL', url:u, pkg:'com.google.android.apps.maps' } }; }
     case 'START_NAVIGATION': { const u = 'https://www.google.com/maps/dir/?api=1&destination=' + enc(p.destination) + '&travelmode=' + p.mode; return { kind:'link', href:appIntent(u, 'com.google.android.apps.maps'), label:'Open directions', native:{ action:'OPEN_URL', url:u, pkg:'com.google.android.apps.maps' } }; }
     case 'PREPARE_CHAT_CONTACT': return {kind:'native-contact-draft',label:'Prepare ' + p.app + ' message',app:p.app,contact_name:p.contact_name,message:p.message};
+    case 'SOCIAL_CHAT_OPEN': return {kind:'native-social-open',app:p.app,query:p.contact_name};
+    case 'SOCIAL_INAPP_SEARCH': return {kind:'native-social-open',app:p.app,query:p.query};
+    case 'SCREENSHOT_CAPTURE': return {kind:'native-screenshot-once'};
     case 'SOCIAL_SEARCH': {
       const lookup = {
         youtube:{url:'https://www.youtube.com/results?search_query='+enc(p.query),pkg:'com.google.android.youtube',name:'YouTube'},
@@ -820,6 +844,11 @@ TOOLS
 - androidAction: one action per call, from the fixed list only.
 - getFeatureReport: if the person asks for all Maya features, supported/unsupported actions, bugs, permission status, which things work or don't work, or an app feature audit, CALL getFeatureReport FIRST. It gathers the actual on-device capability and permission snapshots. Do not instead repeat the generic lines "I only assist with basic apps and messaging" or "I cannot take screenshots"; the installed Android version contains an explicit opt-in screenshot control. Never say screenshot happened unless the screenshot callback says it did. Never say a Settings button proves success. This report does not actually exercise every feature. Give the report in Bengali and clarify unverified items.
 - You DO have tools for real search requests: SOCIAL_SEARCH opens YouTube, Facebook people search, TikTok search, or Instagram profile results (Instagram uses Google site-search fallback). Use it with app and query instead of claiming all in-app searching is impossible. These intents open a search page; they do NOT prove search results appeared inside a particular app.
+- SOCIAL_CHAT_OPEN (native Android only): for "IMO-তে Rahim খোঁজো", "Messenger-এ Ayesha-র chat খোলো", or WhatsApp contact by visible name, use app=imo|messenger|whatsapp and contact_name. This launches the installed app, finds a visible Search control and types the name using optional Accessibility. Only a unique, exact visible match is automatically tapped. It does NOT send a message, verify the account identity or see hidden contacts. If the app changes UI or names are ambiguous, ask the person to select the right result manually.
+- SOCIAL_INAPP_SEARCH (native): TikTok/YouTube/Facebook search INSIDE the installed app using visible Accessibility controls. Do not claim results opened until the person confirms. Never silently use Google as a fallback for TikTok if the installed app is missing.
+- SCREENSHOT_CAPTURE (native): only on explicit request, capture one screenshot on device, never upload it automatically. A successful "pending" only means the request started; use the image reader after explicit consent to analyze the screenshot.
+- "Tap this" without the name of a visible button is ambiguous. Ask what text is on the button, or use a consensual screen reader. SCREEN_ACTION tap requires a specific label, and never send/pay/delete/approve anything through generic tap.
+- IMO, Messenger and WhatsApp do NOT have a universal reliable unattended auto-send API here. You can prepare messages, help open the intended chat and use authorized notification replies after confirmation, but ordinary app chat Send remains a user action. Never claim a draft was sent.
 - For a specific YouTube video, YOUTUBE_PLAY (native Android only) opens results and attempts a visible title match through optional Accessibility. Report that playback is attempted, not guaranteed. If a result is ambiguous, ask them to choose. Do not say you watched or played it unless verified.
 - With user instruction, SCREEN_ACTION (native Android only) can Home, Back, Scroll, Lock, try the first visible YouTube title, or Tap visible text. The user must enable Maya Accessibility; some apps hide their buttons or block actions. Use these tools instead of reflexively claiming you cannot interact with profiles. Never infer unseen screen content or claim an actual tap succeeded without tool status.
 - You CAN help with dropshipping and e-commerce through conversation: research products and suppliers using searchWeb, propose store names, product descriptions, ads, pricing plans, fulfilment checklists, and explain dashboards. You do not have an authenticated store/account API and cannot promise to change products, orders, payouts, listings, or financial settings automatically. Provide useful drafts/plans and request links or data for account-specific work; never say you cannot help with e-commerce at all.
@@ -848,7 +877,7 @@ function toolDeclarations(native) {
     { name:'getFeatureReport', description:'READ-ONLY: generate Maya installed app feature inventory and current Android permission states, in Bengali. Call this first for user questions about all features, what is working, incomplete, unsupported, available permissions, or self-diagnostics. This does NOT exercise actions or prove end-to-end operation.', parameters:{ type:'OBJECT', properties:{ } } },
     { name:'androidAction', description:'Do one safe phone action from a fixed list. Risky ones need confirmed=false first, then confirmed=true with the token.', parameters:{ type:'OBJECT', properties:{
       action:S('The action name.', { enum:native ? PHASE1.concat(NATIVE_ACTIONS) : PHASE1 }),
-      app:S('OPEN_APP / PREPARE_CHAT_CONTACT app name; SOCIAL_SEARCH app=youtube|facebook|tiktok|instagram.'),
+      app:S('OPEN_APP / PREPARE_CHAT_CONTACT app name; SOCIAL_CHAT_OPEN app=imo|messenger|whatsapp; SOCIAL_INAPP_SEARCH app=tiktok|youtube|facebook; SOCIAL_SEARCH app=youtube|facebook|tiktok|instagram.'),
       setting:S('OPEN_SETTINGS: main, wifi, bluetooth, battery, display, storage, hotspot, accessibility, notifications, dnd.'),
       seconds:{ type:'INTEGER', description:'START_TIMER: duration in seconds.' },
       label:S('Optional label for a timer or alarm.'),
@@ -860,15 +889,15 @@ function toolDeclarations(native) {
       date:S('CREATE_CALENDAR_EVENT: date as YYYY-MM-DD.'),
       duration_minutes:{ type:'INTEGER', description:'Event length in minutes (default 60).' },
       location:S('Optional event location.'),
-      contact_name:S('Name of the contact, if the person said one.'),
+      contact_name:S('Person name for SOCIAL_CHAT_OPEN or message actions; ask for the exact name if ambiguous.'),
       phone:S('Phone number exactly as the person gave it. Never invent one.'),
       message:S('Messaging actions: exactly what the person said. For PREPARE_CHAT_CONTACT app=whatsapp|messenger|imo|telegram and contact_name exact saved name. Drafts NEVER auto-send; user chooses or checks chat and taps Send.'),
       limit:{ type:'INTEGER', description:'READ_NOTIFICATION: how many recent messages, 1-10 (default 5).' },
       level:{ type:'INTEGER', description:'CHANGE_MEDIA_VOLUME (0-100) or CHANGE_BRIGHTNESS (1-100): exact percent.' },
       direction:S('CHANGE_MEDIA_VOLUME / CHANGE_BRIGHTNESS: use instead of level for "louder", "dimmer" etc.', { enum:['up', 'down'] }),
       notification_id:S('REPLY_NOTIFICATION: the id returned by READ_NOTIFICATION.'),
-      query:S('OPEN_MAPS / WEB_SEARCH / YOUTUBE_SEARCH / FACEBOOK_SEARCH / SOCIAL_SEARCH / YOUTUBE_PLAY: search phrase or video name.'),
-      cmd:S('SCREEN_ACTION: home, back, scrollup, scrolldown, tap, firstvideo, lock.', { enum:['home','back','scrollup','scrolldown','tap','firstvideo','lock'] }),
+      query:S('OPEN_MAPS / WEB_SEARCH / YOUTUBE_SEARCH / FACEBOOK_SEARCH / SOCIAL_SEARCH / SOCIAL_INAPP_SEARCH / YOUTUBE_PLAY: search phrase or video name.'),
+      cmd:S('SCREEN_ACTION: home, back, scrollup, scrolldown, tap (explicit visible label), firstvideo, lock.', { enum:['home','back','scrollup','scrolldown','tap','firstvideo','lock'] }),
       text:S('SCREEN_ACTION tap: exactly what is visibly labeled on the screen. Never tap buttons that send/pay/delete/approve.'),
       destination:S('START_NAVIGATION: destination the person named.'),
       mode:S('START_NAVIGATION: travel mode.', { enum:TRAVEL }),
@@ -1294,6 +1323,8 @@ async function runPlan(action, p) {
         ? {status:'opened', note:(r.note||'Draft opened.')+' Recipient and Send must be checked manually.'}
         : r;
     }
+    case 'native-social-open': return await nativeControl('V62_OPEN_SEARCH',{app:plan.app,query:plan.query});
+    case 'native-screenshot-once': return await nativeControl('V52_SCREENSHOT_START',{});
     case 'native-screen-action': return await nativeControl('V4_ACTION',{cmd:plan.cmd,text:plan.text});
     case 'native-video-play': return await nativeControl('V4_PLAY_SEARCH',{query:plan.query});
     case 'native-reminder': {
@@ -1301,7 +1332,11 @@ async function runPlan(action, p) {
       const r = await nativeControl('REMINDER_SET', { title:plan.label, at:plan.at });
       refreshV2(); return r;
     }
-    case 'link': { const r = await nativeLaunch(plan); if (r) return r; return await launchLink(plan); }
+    case 'link': {
+      if(action==='SOCIAL_SEARCH' && ['tiktok','youtube','facebook'].includes(p.app) && hasNative())
+        return await nativeControl('V62_OPEN_SEARCH',{app:p.app,query:p.query});
+      const r = await nativeLaunch(plan); if (r) return r; return await launchLink(plan);
+    }
     case 'timer': { const r = await nativeClock('START_TIMER', { seconds:Math.round(plan.ms / 1000), label:plan.label }); if (r) return r; } Timers.add(plan.ms, plan.label); return { status:'scheduled_in_app', note:'Timer runs inside this app and rings only while the app stays open. Tell the person that.' };
     case 'alarm': { const d = new Date(plan.at); const r = await nativeClock('CREATE_ALARM', { hour:d.getHours(), minute:d.getMinutes(), label:plan.label }); if (r) return r; } Timers.add(plan.at - Date.now(), plan.label, plan.at); return { status:'scheduled_in_app', note:'Alarm runs inside this app and rings only while the app stays open. Tell the person that.' };
     case 'native-control': return await nativeControl(action, p);
@@ -2236,6 +2271,27 @@ $5('v6BundledModel')?.addEventListener('click',async()=>{
   e('v7CopyReportBtn')?.addEventListener('click',async()=>{const t=window.MayaLastFeatureReport||await collectMayaFeatureReport();showMayaFeatureReport(t,false);try{await navigator.clipboard.writeText(t);msg('v7FullReport',t+'\n\nCopied report.');}catch(_){msg('v7FullReport',t+'\n\nCopy manually from this box.');}});
   e('v7ExportReportBtn')?.addEventListener('click',async()=>{const t=window.MayaLastFeatureReport||await collectMayaFeatureReport();showMayaFeatureReport(t,false);const url=URL.createObjectURL(new Blob([t],{type:'text/plain;charset=utf-8'}));const a=document.createElement('a');a.href=url;a.download='Maya-Feature-Report-BN.txt';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),3000);});
   window.MayaV6Test={parseOffline,ytUrl};
+})();
+</script>
+<script>
+/* Maya V6.2: explicit native social lookup test panel; no sensitive contacts copied into storage. */
+(()=>{'use strict';
+const $=id=>document.getElementById(id),status=$('v62Status');
+if(!status)return;
+const call=(action,params={})=>{if(!window.MayaBridge?.control)return {status:'unsupported',message:'Install the latest Maya Android APK to use in-app search.'};
+try{return JSON.parse(window.MayaBridge.control(action,JSON.stringify(params)));}
+catch(e){return {status:'error',message:String(e.message||e)};}};
+let timer=null;
+const show=r=>{status.textContent=(r.status||'unknown')+': '+(r.message||'No details.');};
+function poll(){clearTimeout(timer);const r=call('V62_STATUS');show(r);if(r.status==='pending')timer=setTimeout(poll,900);}
+$('v62Open').addEventListener('click',()=>{
+const app=$('v62App').value,query=$('v62Name').value.trim();
+if(query.length<2){status.textContent='Enter a name or search phrase (at least 2 characters).';return;}
+if(!confirm('Open '+app+' and search for "'+query+'"? Only a unique exact visible chat name may be opened. Nothing will be sent.'))return;
+const r=call('V62_OPEN_SEARCH',{app,query});show(r);if(r.status==='pending')poll();
+});
+$('v62Check').addEventListener('click',poll);
+$('v62Cancel').addEventListener('click',()=>{clearTimeout(timer);show(call('V62_CANCEL'));});
 })();
 </script>
 </body>

@@ -2206,3 +2206,264 @@ if [ -f maya.vrm ]; then
 else
   echo "Maya V6 bundled 3D asset missing: model button will show a useful error."
 fi
+
+# Maya V6.2: explicit, limited Android social navigation.
+cat > "$APP_DIR/MayaV62Automation.java" <<'JAVA_V62'
+package com.tanim.maya;
+
+import android.accessibilityservice.AccessibilityService;
+import android.app.Activity;
+import android.content.Context;
+import android.content.Intent;
+import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
+import android.os.SystemClock;
+import android.view.accessibility.AccessibilityNodeInfo;
+import android.content.pm.PackageManager;
+import org.json.JSONObject;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Locale;
+
+/**
+ * User-directed, limited Accessibility navigation. No credential access, blind
+ * coordinates, payments, unattended sends, automatic acceptance or analytics.
+ * Never reads a chat message body; looks only for the requested visible name.
+ */
+public final class MayaV62Automation {
+    private MayaV62Automation() {}
+    private static final Handler main=new Handler(Looper.getMainLooper());
+    private static String targetPkg="",query="",mode="",status="idle",note="No search requested.";
+    private static int stage=0,attempts=0;
+    private static long expires=0;
+    private static final int LIMIT=380;
+    private static final String[] SOCIAL={"imo","messenger","whatsapp","tiktok","youtube","facebook"};
+    private static String pkg(String a){switch(a){
+        case "imo":return "com.imo.android.imoim";
+        case "messenger":return "com.facebook.orca";
+        case "whatsapp":return "com.whatsapp";
+        case "tiktok":return "com.zhiliaoapp.musically";
+        case "youtube":return "com.google.android.youtube";
+        case "facebook":return "com.facebook.katana";
+        default:return "";
+    }}
+    private static JSONObject j(String s,String msg){
+        JSONObject o=new JSONObject();try{o.put("status",s);o.put("message",msg);o.put("app",targetPkg);o.put("stage",stage);}catch(Exception ignored){}return o;
+    }
+    public static synchronized String state(){return j(status,note).toString();}
+    private static void finish(String state,String detail){status=state;note=detail;stage=0;}
+    public static synchronized String start(Context context,String app,String name){
+        app=app==null?"":app.toLowerCase(Locale.ROOT).trim();
+        name=name==null?"":name.replaceAll("\\s+"," ").trim();
+        if(name.length()<2||name.length()>70)return j("error","Say a specific person or search phrase (2–70 characters).").toString();
+        String packageName=pkg(app);
+        if(packageName.isEmpty())return j("error","Only imo, Messenger, WhatsApp, TikTok, YouTube or Facebook are supported.").toString();
+        if(MayaV4AccessService.active==null)return j("needs_permission","Enable Maya Accessibility in Android Settings. Try again.").toString();
+        Intent launch=context.getPackageManager().getLaunchIntentForPackage(packageName);
+        if(launch==null)return j("error",app+" app is not installed or Android cannot find it. No Google fallback was opened.").toString();
+        if("pending".equals(status))return j("pending","Another app search is in progress. Wait or cancel it first.").toString();
+        targetPkg=packageName;query=name;mode=app;status="pending";stage=1;attempts=0;
+        expires=SystemClock.uptimeMillis()+16000;
+        try{
+            launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_SINGLE_TOP);
+            context.startActivity(launch);
+            main.removeCallbacks(tick);main.postDelayed(tick,850);
+            return j("pending","Opening "+app+" and looking for its visible Search field; no message will be sent.").toString();
+        }catch(Exception ex){finish("error","Could not open "+app+" ("+ex.getClass().getSimpleName()+").");return state();}
+    }
+    public static synchronized void onWindowChange(){
+        if("pending".equals(status)) { main.removeCallbacks(tick);main.postDelayed(tick,420); }
+    }
+    public static synchronized String cancel(){
+        if("pending".equals(status)){finish("cancelled","Search cancelled. No message sent.");main.removeCallbacks(tick);}
+        return state();
+    }
+    private static final Runnable tick=()->tickNow();
+    private static synchronized void tickNow(){
+        if(!"pending".equals(status))return;
+        if(SystemClock.uptimeMillis()>expires){finish("not_verified","Timed out. The app may hide search controls from Accessibility. Open the chat manually.");return;}
+        MayaV4AccessService a=MayaV4AccessService.active;
+        if(a==null){finish("needs_permission","Accessibility disconnected.");return;}
+        AccessibilityNodeInfo root=a.getRootInActiveWindow();
+        if(root==null||root.getPackageName()==null||!targetPkg.contentEquals(root.getPackageName())){
+            schedule(600);return;
+        }
+        if(stage==1){
+            AccessibilityNodeInfo edit=findSearchEdit(root);
+            if(edit!=null){stage=2;}
+            else if(clickSearchIcon(root)) {stage=2;schedule(650);return;}
+            else if(++attempts>9){finish("not_verified","Could not locate a visible Search button in this app. No blind tap attempted.");return;}
+        }
+        if(stage==2){
+            AccessibilityNodeInfo edit=findSearchEdit(root);
+            if(edit!=null){
+                Bundle args=new Bundle();args.putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE,query);
+                if(edit.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT,args)){
+                    stage=3;attempts=0;
+                    // Search/Enter on the keyboard when possible. Some versions do it automatically.
+                    main.postDelayed(()->submitSearchKeyboard(),300);
+                    schedule(1500);return;
+                }
+            }
+            if(++attempts>8){finish("not_verified","The search field did not accept text. Try searching manually.");return;}
+        }
+        if(stage==3){
+            if("tiktok".equals(mode)||"youtube".equals(mode)||"facebook".equals(mode)){
+                finish("search_entered","Search phrase entered inside the app. Verify results on screen; no result auto-selected.");return;
+            }
+            List<AccessibilityNodeInfo> candidates=matchingChats(root,query);
+            if(candidates.size()==1){
+                if(click(candidates.get(0))){finish("opened_unverified","One exact visible match was tapped in "+mode+". Check the chat header before composing or sending.");return;}
+                finish("not_verified","Exact match was visible but Android rejected the tap.");return;
+            }
+            if(candidates.size()>1){finish("needs_choice","Multiple exact visible matches. Select the correct person manually; no one was opened.");return;}
+            if(++attempts>7){finish("needs_choice","The app search was entered, but no unique exact visible contact was verified. Choose the correct result manually.");return;}
+        }
+        schedule(600);
+    }
+    private static void schedule(long wait){main.removeCallbacks(tick);main.postDelayed(tick,wait);}
+    private static void submitSearchKeyboard(){
+        if(stage!=3)return;
+        MayaV4AccessService a=MayaV4AccessService.active;if(a==null)return;
+        AccessibilityNodeInfo root=a.getRootInActiveWindow();
+        if(root==null||root.getPackageName()==null||!targetPkg.contentEquals(root.getPackageName()))return;
+        AccessibilityNodeInfo e=findSearchEdit(root);
+        if(e!=null && android.os.Build.VERSION.SDK_INT>=30){
+            try{e.performAction(AccessibilityNodeInfo.AccessibilityAction.ACTION_IME_ENTER.getId());}catch(Exception ignored){}
+        }
+    }
+    private static List<AccessibilityNodeInfo> nodes(AccessibilityNodeInfo root){
+        List<AccessibilityNodeInfo> all=new ArrayList<>();if(root==null)return all;
+        all.add(root);
+        for(int i=0;i<all.size()&&all.size()<LIMIT;i++){
+            AccessibilityNodeInfo n=all.get(i);
+            int count=0;try{count=Math.min(n.getChildCount(),45);}catch(Exception ignored){}
+            for(int c=0;c<count&&all.size()<LIMIT;c++){
+                AccessibilityNodeInfo child=null;try{child=n.getChild(c);}catch(Exception ignored){}
+                if(child!=null)all.add(child);
+            }
+        }
+        return all;
+    }
+    private static String text(CharSequence s){return s==null?"":s.toString().trim().toLowerCase(Locale.ROOT);}
+    private static AccessibilityNodeInfo findSearchEdit(AccessibilityNodeInfo root){
+        for(AccessibilityNodeInfo n:nodes(root)){
+            if(!n.isVisibleToUser() || !n.isEditable() || n.isPassword()) continue;
+            String hint="";
+            try{if(android.os.Build.VERSION.SDK_INT>=26) hint=text(n.getHintText());}catch(Exception ignored){}
+            String d=text(n.getContentDescription()),id=text(n.getViewIdResourceName());
+            // Never write a contact name into an ordinary message-compose box.
+            if(hint.contains("search")||hint.contains("সার্চ")||hint.contains("খুঁজ")||
+                d.contains("search")||d.contains("সার্চ")||id.contains("search")) return n;
+        }
+        return null;
+    }
+    private static boolean clickSearchIcon(AccessibilityNodeInfo root){
+        for(AccessibilityNodeInfo n:nodes(root)){
+            if(!n.isVisibleToUser()||n.isEditable()||n.isPassword())continue;
+            String desc=text(n.getContentDescription()),t=text(n.getText()),id=text(n.getViewIdResourceName());
+            boolean likely=desc.equals("search")||desc.equals("search chats")||desc.equals("search people")||desc.equals("search messages")||desc.equals("খুঁজুন")||desc.equals("সার্চ")||t.equals("search")||t.equals("search chats")||t.equals("search people")||id.endsWith(":id/search")||id.endsWith(":id/search_button")||id.endsWith(":id/search_icon");
+            if(likely && click(n))return true;
+        }
+        return false;
+    }
+    private static List<AccessibilityNodeInfo> matchingChats(AccessibilityNodeInfo root,String sought){
+        String wanted=text(sought);List<AccessibilityNodeInfo> list=new ArrayList<>();HashSet<String> seen=new HashSet<>();
+        for(AccessibilityNodeInfo n:nodes(root)){
+            if(!n.isVisibleToUser()||n.isPassword()||n.isEditable())continue;
+            String t=text(n.getText());
+            if(!t.equals(wanted))continue; // no partial guess or first-result click
+            AccessibilityNodeInfo clickNode=n;
+            for(int i=0;i<5&&clickNode!=null&&!clickNode.isClickable();i++)clickNode=clickNode.getParent();
+            if(clickNode==null||!clickNode.isClickable()||!clickNode.isVisibleToUser())continue;
+            android.graphics.Rect r=new android.graphics.Rect();clickNode.getBoundsInScreen(r);
+            String key=r.flattenToString();if(seen.add(key))list.add(clickNode);
+        }
+        return list;
+    }
+    private static boolean click(AccessibilityNodeInfo n){
+        for(int i=0;n!=null&&i<6;i++,n=n.getParent()){
+            if(n.isClickable()&&n.isVisibleToUser()&&!n.isPassword()&&n.performAction(AccessibilityNodeInfo.ACTION_CLICK))return true;
+        }
+        return false;
+    }
+}
+
+JAVA_V62
+
+python3 - <<'PY_V62_MERGE'
+from pathlib import Path
+app=Path('android/app/src/main/java/com/tanim/maya')
+bridge=app/'MayaBridge.java'
+s=bridge.read_text()
+needle='return MayaControls.run(ctx, act, action, a);'
+assert s.count(needle)==1
+add='''if (action != null && action.startsWith("V62_")) {
+                if ("V62_OPEN_SEARCH".equals(action)) return MayaV62Automation.start(ctx,a.optString("app",""),a.optString("query",""));
+                if ("V62_STATUS".equals(action)) return MayaV62Automation.state();
+                if ("V62_CANCEL".equals(action)) return MayaV62Automation.cancel();
+                return "{\\"status\\":\\"error\\",\\"message\\":\\"Unknown V6.2 action\\"}";
+            }
+            '''
+s=s.replace(needle,add+needle,1)
+bridge.write_text(s)
+access=app/'MayaV4AccessService.java'
+s=access.read_text()
+needle='    @Override public void onAccessibilityEvent(AccessibilityEvent event) {'
+assert s.count(needle)==1
+s=s.replace(needle,needle+'\n        MayaV62Automation.onWindowChange();',1)
+access.write_text(s)
+xml=Path('android/app/src/main/res/xml/maya_v4_accessibility.xml')
+s=xml.read_text().replace('android:accessibilityEventTypes="typeWindowStateChanged"',
+                              'android:accessibilityEventTypes="typeWindowStateChanged|typeWindowContentChanged"')
+xml.write_text(s)
+manifest=Path('android/app/src/main/AndroidManifest.xml')
+s=manifest.read_text()
+queries=''.join('<package android:name="'+x+'" />' for x in ('com.imo.android.imoim','com.facebook.orca','com.whatsapp','com.zhiliaoapp.musically','com.google.android.youtube','com.facebook.katana'))
+if '</queries>' in s:
+    s=s.replace('</queries>',queries+'</queries>',1)
+else:
+    s=s.replace('<application','<queries>'+queries+'</queries>\n<application',1)
+manifest.write_text(s)
+voice=app/'MayaV4Controls.java'
+s=voice.read_text()
+needle='        MayaV4AccessService access = MayaV4AccessService.active;\n        if (access == null) return;'
+assert s.count(needle)==1, 'Voice command anchor missing'
+add='''        // V6.2: explicit app-name searches. Only unique exact visible chat names may be tapped.
+        String[] searchApps={"imo","messenger","whatsapp","tiktok","youtube","facebook"};
+        for(String platform:searchApps){
+            for(String prefix:new String[]{"search "+platform+" ","open "+platform+" ",platform+" search ",platform+" open "}){
+                if(words.startsWith(prefix)&&words.length()>prefix.length()+1){
+                    MayaV62Automation.start(ctx,platform,words.substring(prefix.length()));return;
+                }
+            }
+        }
+        String[][] bnApps={{"ইমোতে ","imo"},{"ইমো ","imo"},{"মেসেঞ্জারে ","messenger"},
+            {"মেসেঞ্জার ","messenger"},{"হোয়াটসঅ্যাপে ","whatsapp"},{"হোয়াটসঅ্যাপে ","whatsapp"},
+            {"টিকটকে ","tiktok"},{"টিকটক ","tiktok"}};
+        for(String[] item:bnApps){
+            if(words.startsWith(item[0])){
+                String n=words.substring(item[0].length()).replaceAll("(কে )?(সার্চ করো|খুঁজে খোলো|খুঁজো|চ্যাট খোলো|ওপেন করো|খোলো)$", "").trim();
+                if(n.length()>1)MayaV62Automation.start(ctx,item[1],n);return;
+            }
+        }
+        if(words.contains("screenshot")||words.contains("screen shot")||words.contains("স্ক্রিনশট") || words.contains("স্ক্রিন শট")){
+            MayaV52Capture.start(ctx);return;
+        }
+        // A vague "tap this" has no safe target. Need an explicit visible label.
+        if(words.endsWith(" ট্যাপ করো")||words.endsWith(" চাপ দাও")){
+            String x=words.endsWith(" ট্যাপ করো")?words.substring(0,words.length()-" ট্যাপ করো".length()):words.substring(0,words.length()-" চাপ দাও".length());
+            if(!x.equals("এটা")&&!x.equals("ওটা")&&!x.equals("এইটা")&&x.length()>=2){
+                MayaV4AccessService c=MayaV4AccessService.active;
+                if(c!=null)c.command("tap",x);
+            }
+            return;
+        }
+'''
+s=s.replace(needle,add+needle,1)
+voice.write_text(s)
+print('Maya V6.2 in-app search and explicit voice screenshot/tap patched.')
+
+PY_V62_MERGE
