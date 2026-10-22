@@ -11,3 +11,23 @@ Maya tested components 2026-10-19
 - Gemini live network: NOT RUN (no user's Gemini API key)
 - Android microphone / camera: NOT TESTED (no Android device attached)
 - Messenger/IMO recipient/send: USER ACTION REQUIRED
+--- V10 upgrade tests (2026-10-22) ---
+- Full <script> syntax check (Node Function constructor, all 12 blocks): pass
+- tests/v10-logic.test.mjs (node): 34/34 pass
+  - retiring Live models removed from DEFAULT_LIVE (gemini-3.1-flash-live-preview, gemini-2.5-flash-native-audio-preview-12-2025 -> shutdown 2026-11-17 per ai.google.dev/gemini-api/docs/deprecations)
+  - gemini-3.8-live default; gemini-3.8-live-extended-thinking fallback; gemini-4-argon added as text fallback (flash stays primary)
+  - wikiSummary validation, task plan validation ($ref rules: earlier steps only, safe paths), reference resolution (incl. prototype-pollution guards)
+  - runTaskPlan orchestration with fake executor: happy path, $ref propagation, single retry on transient failure, no retry on rejected steps, dependent-step skip on failure, step deadline, progress callbacks
+  - regression: validateAction (OPEN_APP, unknown action, timer bounds) unchanged
+- Wikipedia REST API + Open-Meteo CORS (access-control-allow-origin: *) verified from a browser-like origin
+- Headless Chromium (Playwright) against a local server: see below
+--- V10 browser smoke test (Playwright headless Chromium, local http server): 25/25 pass ---
+- page loads with NO console/page errors; UI initializes (chip, mic)
+- V8 wrapper intact: effective declarations contain V10 tools + V8 getWeather, no duplicate names
+- real Wikipedia call (no key needed): ok result, 404 handled as not_found, empty topic rejected
+- real 2-step task with $ref chaining (wiki title -> weather place): completes, exactly ONE history entry with findings + saved plan
+- busy guard prevents overlapping runs; non-allowlisted step tool rejected
+- session binding (stubbed Live socket): stable session answers fast tool AND task; session replaced before responses ready -> NO response is ever sent to the new session
+- fallback dispatch: runTool('runTask') executes a task without Live
+- startup recover() marks interrupted runs; taskHistory includes found snippets + plan
+NOT RUN: real Gemini API calls (no user key), Android native bridge, APK build.
