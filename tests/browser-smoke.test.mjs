@@ -8,15 +8,15 @@ const t = (name, cond, extra) => { if (cond) pass++; else { fail++; console.erro
 const browser = await chromium.launch();
 const page = await browser.newPage();
 const errors = [];
-page.on('console', m => { if (m.type() === 'error') errors.push(m.text()); });
-page.on('pageerror', e => errors.push('PAGEERROR: ' + e.message));
+page.on('console', m => { if (m.type() === 'error') errors.push({ text: m.text(), url: (m.location() && m.location().url) || '' }); });
+page.on('pageerror', e => errors.push({ text: 'PAGEERROR: ' + e.message, url: '' }));
 const notFound = [];
 page.on('response', r => { if (r.status() >= 400) notFound.push(r.status() + ' ' + r.url()); });
 
 await page.goto(URL, { waitUntil: 'domcontentloaded' });
 await page.waitForTimeout(2500); // let V8 wire() and init run
 
-t('no page errors on startup', errors.length === 0, errors.slice(0, 5).join(' | '));
+t('no page errors on startup', errors.length === 0, errors.slice(0, 5).map(e => e.text + ' @ ' + e.url).join(' | '));
 
 // app initialized
 const chip = await page.textContent('#chipText');
@@ -46,17 +46,17 @@ t('wikiSummary 404 handled as not_found', wiki404 && wiki404.status === 'not_fou
 const wikiBad = await page.evaluate(() => wikiSummary({ topic: '' }));
 t('wikiSummary rejects empty topic', wikiBad && wikiBad.status === 'rejected');
 
-// real task run: exactly ONE history entry with findings + plan
+// real task run: exactly ONE history entry with findings + plan (string-reference chaining)
 const task = await page.evaluate(async () => {
   const r = await TaskEngine.run({ goal: 'Check Dubai info', steps: [
     { summary: 'Look up Dubai on Wikipedia', tool: 'wikiSummary', args: { topic: 'Dubai' } },
-    { summary: 'Weather check', tool: 'getWeather', args: { place: { $ref: { step: 1, path: ['title'] } } } }
+    { summary: 'Weather check', tool: 'getWeather', args: { place: '$1.title' } }
   ] });
   const runs = JSON.parse(localStorage.getItem('maya.tasks') || '[]');
   return { r, runCount: runs.length, last: runs[runs.length - 1] };
 });
 t('runTask real run completes ok', task.r && task.r.status === 'ok' && task.r.taskStatus === 'done', JSON.stringify(task.r).slice(0, 300));
-t('runTask $ref chained title into weather', task.r.steps[1] && task.r.steps[1].status === 'done' && /Dubai/.test(task.r.steps[1].result || ''), (task.r.steps[1] || {}).result);
+t('runTask $1.title chained into weather', task.r.steps[1] && task.r.steps[1].status === 'done' && /Dubai/.test(task.r.steps[1].result || ''), (task.r.steps[1] || {}).result);
 t('exactly one history entry per task', task.runCount === 1, 'runCount=' + task.runCount);
 t('history entry has findings + plan', task.last && task.last.plan && task.last.steps.every(s => s.result), JSON.stringify(task.last).slice(0, 200));
 
@@ -84,28 +84,8 @@ const busy = await page.evaluate(async () => {
 });
 t('busy guard prevents overlapping runs', busy === 'busy', busy);
 
-// handleToolCall session binding: mixed message, immediate response for fast tool, deferred for runTask, stale session never sent
-const session = await page.evaluate(async () => {
-  const sent = [];
-  const realSend = Live.send.bind(Live);
-  Live.send = o => { sent.push(JSON.parse(JSON.stringify(o))); return true; };
-  const realWs = Live.ws; const realActive = app.active;
-  const fakeWs = { readyState: 1, fake: true };
-  Live.ws = fakeWs; app.active = true; Live.ready = true;
-  try {
-    const p = handleToolCall({ functionCalls: [
-      { id: 'fc-wiki', name: 'wikiSummary', args: { topic: 'Dubai' } },
-      { id: 'fc-task', name: 'runTask', args: { goal: 'g', steps: [{ summary: 'w', tool: 'wikiSummary', args: { topic: 'Dubai' } }] } }
-    ] });
-    // session changes immediately (before the deferred loop can start its work)
-    Live.ws = { readyState: 1, fake: 2 };
-    await p;
-    return { ids: sent.map(s => s.toolResponse.functionResponses.map(f => f.id)) };
-  } finally { Live.ws = realWs; app.active = realActive; Live.ready = false; Live.send = realSend; }
-});
-t('session change before responses ready drops them (covered by next case)', true);
-
-// immediate full-session replacement: NO response (not even the fast tool) goes to the new session
+// handleToolCall session binding (stubbed Live socket)
+// case A: session replaced before responses ready -> NO response is ever sent to the new session
 const session3 = await page.evaluate(async () => {
   const sent = [];
   const realSend = Live.send.bind(Live);
@@ -143,6 +123,47 @@ const session4 = await page.evaluate(async () => {
 });
 t('stable session answers both fast tool and task', session4.ids.some(a => a.includes('fc-wiki4')) && session4.ids.some(a => a.includes('fc-task4')), JSON.stringify(session4.ids));
 
+// case D (controlled): socket replaced WHILE a task step is executing (held network request)
+// - use a route that holds the Wikipedia request, replace the socket mid-flight, release,
+//   then assert the task completes + is logged, but its answer is NEVER sent to the new session.
+await page.route('**/api/rest_v1/page/summary/Maya*', async route => {
+  await new Promise(r => setTimeout(r, 1200)); // hold the request so the task is mid-flight
+  await route.continue();
+});
+const midTask = await page.evaluate(async () => {
+  const sent = [];
+  const realSend = Live.send.bind(Live);
+  Live.send = o => { sent.push(JSON.parse(JSON.stringify(o))); return true; };
+  const realWs = Live.ws; const realActive = app.active;
+  const fakeWs = { readyState: 1, fake: true };
+  Live.ws = fakeWs; app.active = true; Live.ready = true;
+  try {
+    const p = handleToolCall({ functionCalls: [{ id: 'fc-mid', name: 'runTask', args: { goal: 'mid', steps: [{ summary: 'w', tool: 'wikiSummary', args: { topic: 'Maya civilization' } }] } }] });
+    await new Promise(r => setTimeout(r, 400)); // step now in flight (request held by the route)
+    Live.ws = { readyState: 1, fake: 9 }; // socket replaced mid-task
+    await p;
+    const runs = JSON.parse(localStorage.getItem('maya.tasks') || '[]');
+    const last = runs[runs.length - 1];
+    return { ids: sent.map(s => s.toolResponse.functionResponses.map(f => f.id)), logged: last && last.status };
+  } finally { Live.ws = realWs; app.active = realActive; Live.ready = false; Live.send = realSend; }
+});
+await page.unroute('**/api/rest_v1/page/summary/Maya*');
+t('mid-task socket replacement: task completes + logs, but no stale answer sent', midTask.ids.length === 0 && midTask.logged === 'done', JSON.stringify(midTask));
+
+// case E (controlled): transient network failure on the REAL tool -> one retry, then success
+let netAttempts = 0;
+await page.route('**/api/rest_v1/page/summary/Tokyo*', async route => {
+  netAttempts++;
+  if (netAttempts === 1) return route.abort(); // first attempt fails at network level
+  await route.continue();
+});
+const retryTask = await page.evaluate(async () => {
+  const r = await TaskEngine.run({ goal: 'Tokyo with network blip', steps: [{ summary: 'w', tool: 'wikiSummary', args: { topic: 'Tokyo' } }] });
+  return { status: r.status, taskStatus: r.taskStatus };
+});
+await page.unroute('**/api/rest_v1/page/summary/Tokyo*');
+t('real tool retries once after a network failure', netAttempts === 2 && retryTask.status === 'ok' && retryTask.taskStatus === 'done', JSON.stringify({ netAttempts, retryTask }));
+
 // valid-session case: task answer IS sent on same session
 const session2 = await page.evaluate(async () => {
   const sent = [];
@@ -177,9 +198,9 @@ const rec = await page.evaluate(async () => {
 });
 t('recover marks interrupted runs', rec.changed === true && rec.status === 'interrupted', JSON.stringify(rec));
 
-// page errors after all interactions
-const realErrors = errors.filter(e => !/favicon|404/.test(e));
-t('no page errors during interactions', realErrors.length === 0, realErrors.slice(0, 5).join(' | '));
+// page errors after all interactions (the only allowed 404 console error is the intentional Wikipedia not_found test)
+const realErrors = errors.filter(e => !/wikipedia\.org.*zzzznotapagexyz123|net::ERR_FAILED/.test(e.url + ' ' + e.text));
+t('no page errors during interactions', realErrors.length === 0, realErrors.slice(0, 5).map(e => e.text + ' @ ' + e.url).join(' | '));
 console.log('http >=400 responses (informational):', notFound.slice(0, 5).join(' | ') || 'none');
 
 await browser.close();

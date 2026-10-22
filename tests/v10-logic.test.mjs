@@ -48,36 +48,42 @@ t('validateWikiArgs rejects bad lang', api.validateWikiArgs({ topic: 'x', lang: 
 /* 3. task plan validation */
 const goodPlan = { goal: 'Weather and info about Dubai', steps: [
   { summary: 'Get Dubai weather', tool: 'getWeather', args: { place: 'Dubai' } },
-  { summary: 'Look up Dubai', tool: 'wikiSummary', args: { topic: { $ref: { step: 1, path: ['place'] } } } }
+  { summary: 'Look up Dubai', tool: 'wikiSummary', args: { topic: '$1.place' } }
 ] };
 t('validateTaskPlan ok', api.validateTaskPlan(goodPlan).ok === true);
 t('validateTaskPlan normalizes steps', api.validateTaskPlan(goodPlan).p.steps.length === 2);
 t('plan rejects missing goal', api.validateTaskPlan({ steps: goodPlan.steps }).ok === false);
 t('plan rejects 5 steps', api.validateTaskPlan({ goal: 'g', steps: [1, 2, 3, 4, 5].map(() => ({ summary: 's', tool: 'searchWeb', args: { query: 'q' } })) }).ok === false);
 t('plan rejects unknown tool', api.validateTaskPlan({ goal: 'g', steps: [{ summary: 's', tool: 'androidAction', args: {} }] }).ok === false);
-t('plan rejects $ref to a LATER step', api.validateTaskPlan({ goal: 'g', steps: [
-  { summary: 's1', tool: 'wikiSummary', args: { topic: { $ref: { step: 2, path: ['x'] } } } },
+t('plan rejects reference to a LATER step', api.validateTaskPlan({ goal: 'g', steps: [
+  { summary: 's1', tool: 'wikiSummary', args: { topic: '$2.x' } },
   { summary: 's2', tool: 'searchWeb', args: { query: 'q' } }
 ] }).ok === false);
-t('plan rejects unsafe $ref path', api.validateTaskPlan({ goal: 'g', steps: [
-  { summary: 's1', tool: 'searchWeb', args: { query: 'q' } },
-  { summary: 's2', tool: 'searchWeb', args: { query: { $ref: { step: 1, path: ['__proto__', 'polluted'] } } } }
+t('plan rejects reference on the FIRST step', api.validateTaskPlan({ goal: 'g', steps: [
+  { summary: 's1', tool: 'wikiSummary', args: { topic: '$1.x' } }
 ] }).ok === false);
-t('plan rejects empty path', api.validateTaskPlan({ goal: 'g', steps: [
+t('plan rejects unsafe reference path', api.validateTaskPlan({ goal: 'g', steps: [
   { summary: 's1', tool: 'searchWeb', args: { query: 'q' } },
-  { summary: 's2', tool: 'searchWeb', args: { query: { $ref: { step: 1, path: [] } } } }
+  { summary: 's2', tool: 'searchWeb', args: { query: '$1.__proto__' } }
 ] }).ok === false);
-t('plan rejects array args', api.validateTaskPlan({ goal: 'g', steps: [{ summary: 's', tool: 'searchWeb', args: [] }] }).ok === false);
+t('plan rejects malformed reference string', api.validateTaskPlan({ goal: 'g', steps: [
+  { summary: 's1', tool: 'searchWeb', args: { query: 'q' } },
+  { summary: 's2', tool: 'searchWeb', args: { query: '$1.' } }
+] }).ok === false);
+t('plan rejects object values in args', api.validateTaskPlan({ goal: 'g', steps: [{ summary: 's', tool: 'wikiSummary', args: { topic: { $ref: { step: 1 } } } }] }).ok === false);
 t('plan rejects missing summary', api.validateTaskPlan({ goal: 'g', steps: [{ tool: 'searchWeb', args: {} }] }).ok === false);
 
 /* 4. reference resolution */
 const results = [{ status: 'ok', place: 'Dubai, United Arab Emirates', now: { tempC: 30 } }];
-t('resolveStepRefs resolves nested path', api.resolveStepRefs({ q: { $ref: { step: 1, path: ['now', 'tempC'] } } }, results).q === 30);
-t('resolveStepRefs resolves top-level key', api.resolveStepRefs({ place: { $ref: { step: 1, path: ['place'] } } }, results).place === 'Dubai, United Arab Emirates');
-t('resolveStepRefs rejects prototype path', (() => { try { api.resolveStepRefs({ q: { $ref: { step: 1, path: ['__proto__'] } } }, results); return false; } catch (e) { return true; } })());
-t('resolveStepRefs throws on missing path', (() => { try { api.resolveStepRefs({ q: { $ref: { step: 1, path: ['nope'] } } }, results); return false; } catch (e) { return true; } })());
-t('resolveStepRefs passes literals through', eq(api.resolveStepRefs({ a: 1, b: 'x' }, results), { a: 1, b: 'x' }));
-t('safeGetPath rejects out-of-range array index', (() => { try { api.resolveStepRefs({ q: { $ref: { step: 1, path: [0] } } }, [ { status: 'ok' } ]); return false; } catch (e) { return true; } })());
+t('resolveStepRefs resolves dotted path', api.resolveStepRefs({ topic: '$1.now.tempC' }, results).topic === '30');
+t('resolveStepRefs resolves top-level key', api.resolveStepRefs({ place: '$1.place' }, results).place === 'Dubai, United Arab Emirates');
+t('resolveStepRefs keeps literal strings (even $ prices)', api.resolveStepRefs({ query: '$5 off' }, results).query === '$5 off');
+t('resolveStepRefs rejects prototype path', (() => { try { api.resolveStepRefs({ q: '$1.__proto__' }, results); return false; } catch (e) { return true; } })());
+t('resolveStepRefs throws on missing path', (() => { try { api.resolveStepRefs({ q: '$1.nope' }, results); return false; } catch (e) { return true; } })());
+t('resolveStepRefs throws on non-text referenced value', (() => { try { api.resolveStepRefs({ q: '$1.now' }, results); return false; } catch (e) { return true; } })());
+t('resolveStepRefs rejects object values', (() => { try { api.resolveStepRefs({ q: { a: 1 } }, results); return false; } catch (e) { return true; } })());
+t('resolveStepRefs passes literals through', eq(api.resolveStepRefs({ a: 1, b: 'x', c: true }, results), { a: 1, b: 'x', c: true }));
+t('safeGetPath rejects out-of-range array index', (() => { try { api.resolveStepRefs({ q: '$1.0' }, [{ status: 'ok' }]); return false; } catch (e) { return true; } })());
 
 /* 4b. resolved step-arg validation (before execution) */
 t('validateStepArgs ok for weather', api.validateStepArgs('getWeather', { place: 'Dubai' }) === null);
@@ -90,19 +96,29 @@ t('validateStepArgs rejects array args', api.validateStepArgs('searchWeb', []) !
 
 /* 5. workflow orchestration (runTaskPlan with fake executor) */
 const run = async () => {
-  // happy path: 2 steps, second uses a $ref into the first result
+  // happy path: 2 steps, second uses a reference string into the first result
   let r = await api.runTaskPlan(api.validateTaskPlan(goodPlan).p.steps, async (tool, a) => tool === 'getWeather'
     ? { status: 'ok', place: 'Dubai', tempC: 31 }
     : { status: 'ok', title: a.topic });
   t('runTaskPlan happy path done', r.run.status === 'done' && r.run.steps.every(s => s.status === 'done'));
-  t('runTaskPlan passes $ref value to next step', r.results[1].title === 'Dubai');
+  t('runTaskPlan resolves reference string for next step', r.results[1].title === 'Dubai');
 
-  // retry once on transient failure, then succeed
+  // retry once on transient THROWN failure, then succeed
   let calls = 0;
   r = await api.runTaskPlan([{ summary: 's', tool: 'searchWeb', args: { query: 'q' } }], async () => { if (++calls === 1) throw new Error('network blip'); return { status: 'ok', answer: 'x' }; });
   t('runTaskPlan retries transient failure once', calls === 2 && r.run.status === 'done');
 
-  // hard failure stops the run and marks later steps skipped
+  // retry once on a NON-THROWING transient error result (how the real tools report network failures)
+  let n2 = 0;
+  r = await api.runTaskPlan([{ summary: 's', tool: 'wikiSummary', args: { topic: 'x' } }], async () => { n2++; return n2 === 1 ? { status: 'error', reason: 'Wikipedia lookup failed: TypeError: Failed to fetch' } : { status: 'ok', title: 'x' }; });
+  t('runTaskPlan retries non-throwing transient errors', n2 === 2 && r.run.status === 'done');
+
+  // NON-transient error results are NOT retried (validation-style failures)
+  let n3 = 0;
+  r = await api.runTaskPlan([{ summary: 's', tool: 'getWeather', args: {} }], async () => { n3++; return { status: 'needs_info', reason: 'which city?' }; });
+  t('runTaskPlan does not retry rejected steps', n3 === 1 && r.run.status === 'failed');
+
+  // no retry for non-ok results (executor returns non-ok, no throw)
   r = await api.runTaskPlan([
     { summary: 's1', tool: 'searchWeb', args: { query: 'q' } },
     { summary: 's2', tool: 'searchWeb', args: { query: 'q' } }
@@ -129,18 +145,18 @@ const run = async () => {
   r = await api.runTaskPlan([{ summary: 's', tool: 'searchWeb', args: { query: 'q' } }], async () => { hard++; throw new Error('TypeError: something is undefined'); });
   t('runTaskPlan does not retry programming errors', hard === 1 && r.run.status === 'failed');
 
-  // invalid resolved args (object where text expected) rejected without executing the tool
+  // invalid resolved args (reference resolving to a non-text value) rejected without executing the tool
   let executed = 0;
-  r = await api.runTaskPlan([{ summary: 's1', tool: 'searchWeb', args: { query: 'q' } }, { summary: 's2', tool: 'wikiSummary', args: { topic: { $ref: { step: 1, path: ['meta'] } } } }],
+  r = await api.runTaskPlan([{ summary: 's1', tool: 'searchWeb', args: { query: 'q' } }, { summary: 's2', tool: 'wikiSummary', args: { topic: '$1.meta' } }],
     async (tool) => { executed++; return tool === 'searchWeb' ? { status: 'ok', answer: 'x', meta: { a: 1 } } : { status: 'ok' }; });
   t('runTaskPlan rejects non-text resolved args before execution', executed === 1 && r.run.status === 'failed' && r.run.steps[1].status === 'rejected');
 
-  // overall run deadline stops remaining steps
+  // overall deadline is enforced per attempt: remaining budget caps each step
   r = await api.runTaskPlan(
     [1, 2, 3].map(i => ({ summary: 's' + i, tool: 'searchWeb', args: { query: 'q' } })),
-    async () => { await new Promise(res => setTimeout(res, 30)); return { status: 'ok' }; },
-    { totalDeadlineMs: 40, stepTimeoutMs: 2000 });
-  t('runTaskPlan enforces overall deadline', r.run.status === 'timeout' && r.run.steps.some(s => s.status === 'skipped'));
+    async () => { await new Promise(res => setTimeout(res, 60)); return { status: 'ok' }; },
+    { totalDeadlineMs: 100, stepTimeoutMs: 5000 });
+  t('runTaskPlan enforces overall budget per attempt', r.run.status !== 'done' && r.run.steps.some(s => s.status === 'skipped') && /timed out/.test(r.run.steps.find(s => s.status === 'failed')?.result || ''), JSON.stringify(r.run.steps.map(s => s.status)));
 };
 await run();
 
