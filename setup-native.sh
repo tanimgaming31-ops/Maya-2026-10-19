@@ -1225,15 +1225,26 @@ import java.util.Locale;
 public class MayaV4AccessService extends AccessibilityService {
     static volatile MayaV4AccessService active;
     @Override protected void onServiceConnected() { super.onServiceConnected(); active = this; }
+    private volatile String videoResult="idle",videoNote="No YouTube play request.";
+    static volatile MayaV4AccessService currentVideo;
     private String targetVideo="";
     private long targetUntil=0;
     private final android.os.Handler watchHandler=new android.os.Handler(android.os.Looper.getMainLooper());
     void watchVideoTitle(String title){
+        videoResult="pending";videoNote="Waiting for exact visible YouTube title.";currentVideo=this;
         targetVideo=title.trim().toLowerCase(Locale.ROOT);
         targetUntil=android.os.SystemClock.uptimeMillis()+12000;
         watchHandler.postDelayed(()->tryVideoTitle(),2200);
     }
     void clearVideoWatch(){targetVideo="";targetUntil=0;}
+    String playStatus(){
+        if("pending".equals(videoResult)&&android.os.SystemClock.uptimeMillis()>targetUntil){
+            videoResult="not_verified";videoNote="No matching video title was tapped before timeout.";clearVideoWatch();
+        }
+        org.json.JSONObject o=new org.json.JSONObject();
+        try{o.put("status",videoResult);o.put("message",videoNote);}catch(Exception ignored){}
+        return o.toString();
+    }
     @Override public void onAccessibilityEvent(AccessibilityEvent event) {
         // Only inspect a YouTube window after explicit user request; never collect/store screen contents.
         if(targetVideo.length()>0 && android.os.SystemClock.uptimeMillis()<targetUntil){
@@ -1243,7 +1254,7 @@ public class MayaV4AccessService extends AccessibilityService {
     }
     private void tryVideoTitle(){
         if(targetVideo.length()==0)return;
-        if(android.os.SystemClock.uptimeMillis()>targetUntil){clearVideoWatch();return;}
+        if(android.os.SystemClock.uptimeMillis()>targetUntil){playStatus();return;}
         AccessibilityNodeInfo root=getRootInActiveWindow();
         if(root!=null && root.getPackageName()!=null &&
             "com.google.android.youtube".contentEquals(root.getPackageName())){
@@ -1254,6 +1265,7 @@ public class MayaV4AccessService extends AccessibilityService {
                     if(item==null || !item.isVisibleToUser() || item.getText()==null || item.isEditable())continue;
                     String label=item.getText().toString().toLowerCase(Locale.ROOT);
                     if(label.contains(keyword) && !label.contains("sponsored") && !label.contains("advertisement") && click(item)){
+                        videoResult="title_tapped_unverified";videoNote="Requested title was tapped; actual YouTube playback has not been verified.";
                         clearVideoWatch();return;
                     }
                 }
@@ -1480,8 +1492,12 @@ public final class MayaV4Controls {
                 try{ctx.startActivity(launch);}catch(Exception first){
                     launch.setPackage(null);ctx.startActivity(launch);
                 }
-                return result("opened","YouTube search launch requested; title-matching autoplay is a best-effort attempt and is NOT verified.");
+                return result("pending","YouTube search opened; matching-title tap pending. Check V4_PLAY_STATUS after returning to Maya.");
             }catch(Exception ex){ access.clearVideoWatch();return result("error","Could not open search: "+ex.getClass().getSimpleName()); }
+        }
+        if ("V4_PLAY_STATUS".equals(action)) {
+            MayaV4AccessService service=MayaV4AccessService.active;
+            return service==null?result("needs_permission","Accessibility is off."):service.playStatus();
         }
         if ("V4_STATUS".equals(action)) return result("ok", "Accessibility " +
             (MayaV4AccessService.active != null ? "ON" : "OFF") + ", Background mic " +
@@ -1577,7 +1593,7 @@ JAVA
 cat > android/app/src/main/res/xml/maya_v4_accessibility.xml <<'XML'
 <?xml version="1.0" encoding="utf-8"?>
 <accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
- android:accessibilityEventTypes="typeWindowStateChanged"
+ android:accessibilityEventTypes="typeWindowStateChanged|typeWindowContentChanged|typeViewScrolled"
  android:accessibilityFeedbackType="feedbackGeneric"
  android:accessibilityFlags="flagReportViewIds"
  android:canRetrieveWindowContent="true"
@@ -1972,10 +1988,34 @@ public final class MayaV52Capture {
             return result("pending",note);
         }catch(Exception ex){state="error";note="Android screenshot permission or service rejected capture.";return result("error",note);}
     }
+    static synchronized String saveToGallery(Context ctx){
+        if(!"ready".equals(state)||data.isEmpty())return result("not_available","Capture a screenshot first; there is no image ready to save.");
+        android.net.Uri uri=null;
+        try{
+            byte[] bytes=Base64.decode(data,Base64.NO_WRAP);
+            android.content.ContentValues values=new android.content.ContentValues();
+            values.put(android.provider.MediaStore.Images.Media.DISPLAY_NAME,"Maya_"+System.currentTimeMillis()+".jpg");
+            values.put(android.provider.MediaStore.Images.Media.MIME_TYPE,"image/jpeg");
+            values.put(android.provider.MediaStore.Images.Media.RELATIVE_PATH,"Pictures/Maya");
+            values.put(android.provider.MediaStore.Images.Media.IS_PENDING,1);
+            uri=ctx.getContentResolver().insert(android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI,values);
+            if(uri==null)throw new java.io.IOException("MediaStore insert failed");
+            try(java.io.OutputStream out=ctx.getContentResolver().openOutputStream(uri)){
+                if(out==null)throw new java.io.IOException("Gallery output unavailable");
+                out.write(bytes);
+            }
+            values.clear();values.put(android.provider.MediaStore.Images.Media.IS_PENDING,0);
+            ctx.getContentResolver().update(uri,values,null,null);
+            return result("ok","Screenshot saved in Gallery → Pictures/Maya; no upload occurred.");
+        }catch(Exception ex){
+            if(uri!=null)try{ctx.getContentResolver().delete(uri,null,null);}catch(Exception ignored){}
+            return result("error","Android could not save screenshot to Gallery: "+ex.getClass().getSimpleName());
+        }
+    }
     static String read(){
         JSONObject o=new JSONObject();
         try{o.put("status",state);o.put("message",note);
-            if("ready".equals(state)){o.put("data",data);data="";state="empty";note="Screenshot consumed.";}
+            if("ready".equals(state)){o.put("data",data);}
         }catch(Exception ignored){}
         return o.toString();
     }
@@ -2243,7 +2283,7 @@ public final class MayaV62Automation {
     private static String pkg(String a){switch(a){
         case "imo":return "com.imo.android.imoim";
         case "messenger":return "com.facebook.orca";
-        case "whatsapp":return "com.whatsapp";
+        case "whatsapp":case "whatsapp_clone":return "com.whatsapp";
         case "tiktok":return "com.zhiliaoapp.musically";
         case "youtube":return "com.google.android.youtube";
         case "facebook":return "com.facebook.katana";
@@ -2253,24 +2293,35 @@ public final class MayaV62Automation {
         JSONObject o=new JSONObject();try{o.put("status",s);o.put("message",msg);o.put("app",targetPkg);o.put("stage",stage);}catch(Exception ignored){}return o;
     }
     public static synchronized String state(){return j(status,note).toString();}
+    public static synchronized boolean currentSession(String app,String name){
+        String packageName=pkg(app);
+        return packageName.length()>0 && targetPkg.equals(packageName) && mode.equals(app) &&
+          query.equalsIgnoreCase(name) && ("opened_unverified".equals(status)||"needs_choice".equals(status));
+    }
     private static void finish(String state,String detail){status=state;note=detail;stage=0;}
     public static synchronized String start(Context context,String app,String name){
         app=app==null?"":app.toLowerCase(Locale.ROOT).trim();
         name=name==null?"":name.replaceAll("\\s+"," ").trim();
         if(name.length()<2||name.length()>70)return j("error","Say a specific person or search phrase (2–70 characters).").toString();
         String packageName=pkg(app);
-        if(packageName.isEmpty())return j("error","Only imo, Messenger, WhatsApp, TikTok, YouTube or Facebook are supported.").toString();
+        if(packageName.isEmpty())return j("error","Only IMO, Messenger, WhatsApp (original/clone), TikTok, YouTube or Facebook are supported.").toString();
         if(MayaV4AccessService.active==null)return j("needs_permission","Enable Maya Accessibility in Android Settings. Try again.").toString();
-        Intent launch=context.getPackageManager().getLaunchIntentForPackage(packageName);
-        if(launch==null)return j("error",app+" app is not installed or Android cannot find it. No Google fallback was opened.").toString();
         if("pending".equals(status))return j("pending","Another app search is in progress. Wait or cancel it first.").toString();
+        boolean clone="whatsapp_clone".equals(app);
+        Intent launch=clone?null:context.getPackageManager().getLaunchIntentForPackage(packageName);
+        if(!clone&&launch==null)return j("error",app+" app is not installed or Android cannot find it. No Google fallback was opened.").toString();
+        if(clone){
+            JSONObject opened;
+            try{opened=new JSONObject(MayaV63Tools.run(context,null,"V63_CLONE_WHATSAPP"));}
+            catch(Exception e){return j("error","Clone launch status could not be read.").toString();}
+            if(!"opened_unverified".equals(opened.optString("status")))return opened.toString();
+        }
         targetPkg=packageName;query=name;mode=app;status="pending";stage=1;attempts=0;
-        expires=SystemClock.uptimeMillis()+16000;
+        expires=SystemClock.uptimeMillis()+18000;
         try{
-            launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_SINGLE_TOP);
-            context.startActivity(launch);
-            main.removeCallbacks(tick);main.postDelayed(tick,850);
-            return j("pending","Opening "+app+" and looking for its visible Search field; no message will be sent.").toString();
+            if(!clone){launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_SINGLE_TOP);context.startActivity(launch);}
+            main.removeCallbacks(tick);main.postDelayed(tick,clone?1350:850);
+            return j("pending","Opening "+app+" and looking for visible Search controls; nothing has been sent. Clone identity must be checked on screen.").toString();
         }catch(Exception ex){finish("error","Could not open "+app+" ("+ex.getClass().getSimpleName()+").");return state();}
     }
     public static synchronized void onWindowChange(){
@@ -2416,7 +2467,7 @@ assert s.count(needle)==1
 s=s.replace(needle,needle+'\n        MayaV62Automation.onWindowChange();',1)
 access.write_text(s)
 xml=Path('android/app/src/main/res/xml/maya_v4_accessibility.xml')
-s=xml.read_text().replace('android:accessibilityEventTypes="typeWindowStateChanged"',
+s=xml.read_text().replace('android:accessibilityEventTypes="typeWindowStateChanged|typeWindowContentChanged|typeViewScrolled"',
                               'android:accessibilityEventTypes="typeWindowStateChanged|typeWindowContentChanged"')
 xml.write_text(s)
 manifest=Path('android/app/src/main/AndroidManifest.xml')
@@ -2565,3 +2616,230 @@ s=s.replace(needle,'if (action != null && action.startsWith("V63_")) return Maya
 bridge.write_text(s)
 print('Maya V6.3 registered: battery status, clone WhatsApp probe, front-camera handoff.')
 PY_V63_MERGE
+
+# Maya V6.5: user-initiated Android secure unlock prompt; this NEVER bypasses PIN, biometrics or keyguard.
+cat > "$APP_DIR/MayaV65Tools.java" <<'JAVA_V65'
+package com.tanim.maya;
+
+import android.app.Activity;
+import android.app.KeyguardManager;
+import android.content.Context;
+import android.os.Build;
+import org.json.JSONObject;
+
+public final class MayaV65Tools {
+    private MayaV65Tools(){}
+    private static volatile String unlockStatus="idle", unlockMessage="No unlock was requested.";
+    private static String reply(String status,String message){
+        JSONObject j=new JSONObject();try{j.put("status",status);j.put("message",message);}catch(Exception ignored){}return j.toString();
+    }
+    public static String run(Context ctx,Activity act,String action){
+        if("V65_SCREENSHOT_SAVE".equals(action))return MayaV52Capture.saveToGallery(ctx);
+        if("V65_UNLOCK_STATUS".equals(action))return reply(unlockStatus,unlockMessage);
+        if(!"V65_UNLOCK_REQUEST".equals(action))return reply("error","Unknown V6.5 action.");
+        if(act==null)return reply("needs_visible_app","Open Maya on your phone before requesting unlock. Background unlock is not supported.");
+        if(Build.VERSION.SDK_INT<26)return reply("unsupported","Android 8 or higher required.");
+        KeyguardManager km=(KeyguardManager)ctx.getSystemService(Context.KEYGUARD_SERVICE);
+        if(km==null)return reply("error","Android Keyguard Manager unavailable.");
+        if(!km.isKeyguardLocked())return reply("ok","Phone already unlocked; no credentials requested.");
+        unlockStatus="pending";unlockMessage="Android secure unlock prompt requested. Use your own PIN, fingerprint or face unlock.";
+        try{
+            act.runOnUiThread(()->{
+                try {
+                    km.requestDismissKeyguard(act,new KeyguardManager.KeyguardDismissCallback(){
+                        @Override public void onDismissSucceeded(){unlockStatus="ok";unlockMessage="Android reported lockscreen dismissed.";}
+                        @Override public void onDismissCancelled(){unlockStatus="cancelled";unlockMessage="User cancelled unlock; phone remains locked.";}
+                        @Override public void onDismissError(){unlockStatus="error";unlockMessage="Android rejected the request. Open Maya while its Activity is visible.";}
+                    });
+                }catch(Exception e){unlockStatus="error";unlockMessage="Unlock prompt could not start: "+e.getClass().getSimpleName();}
+            });
+            return reply("pending",unlockMessage);
+        }catch(Exception e){unlockStatus="error";unlockMessage="Android rejected unlock request.";return reply("error",unlockMessage);}
+    }
+}
+JAVA_V65
+python3 - <<'PY_V65_BRIDGE'
+from pathlib import Path
+p=Path('android/app/src/main/java/com/tanim/maya/MayaBridge.java')
+s=p.read_text()
+needle='return MayaControls.run(ctx, act, action, a);'
+assert s.count(needle)==1
+s=s.replace(needle,'if (action != null && action.startsWith("V65_")) return MayaV65Tools.run(ctx,act,action);\n            '+needle,1)
+p.write_text(s)
+print('V6.5 unlock + local screenshot save bridge added.')
+PY_V65_BRIDGE
+
+
+# MAYA V6.6: search one exact named conversation, write one message, optional per-message approved send.
+# The native service runs while the chat app is foreground and refuses unknown recipients.
+cat > "$APP_DIR/MayaV66ChatFlow.java" <<'JAVA_V66'
+package com.tanim.maya;
+
+import android.content.Context;
+import android.graphics.Rect;
+import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
+import android.os.SystemClock;
+import android.view.accessibility.AccessibilityNodeInfo;
+import org.json.JSONObject;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Locale;
+
+/**
+ * One user-approved message in exactly one visible named chat.
+ * No hidden chat reading, credentials, bulk sending or background unattended loops.
+ * Every run terminates after a bounded interval; app UI changes can stop it.
+ */
+public final class MayaV66ChatFlow {
+    private MayaV66ChatFlow(){}
+    private static final Handler main=new Handler(Looper.getMainLooper());
+    private static String app="",name="",message="",state="idle",detail="No message requested.";
+    private static boolean sendAfterDraft=false,cloneConfirmed=false;
+    private static long startedAt=0;
+    private static int attempts=0;
+    private static final int NODE_LIMIT=420;
+    private static String pkg(String key){switch(key){
+        case "imo":return "com.imo.android.imoim";
+        case "messenger":return "com.facebook.orca";
+        case "whatsapp":case "whatsapp_clone":return "com.whatsapp";
+        default:return "";
+    }}
+    private static String reply(String s,String desc){
+        JSONObject r=new JSONObject();try{r.put("status",s);r.put("message",desc);}catch(Exception ignored){}return r.toString();
+    }
+    public static synchronized String status(){return reply(state,detail);}
+    private static void finish(String s,String desc){state=s;detail=desc;message="";sendAfterDraft=false;cloneConfirmed=false;main.removeCallbacks(poll);}
+    public static synchronized String cancel(){if("pending".equals(state))finish("cancelled","Message attempt cancelled. No new message sent.");return status();}
+    public static synchronized String run(Context ctx,String action,JSONObject p){
+        if("V66_STATUS".equals(action))return status();
+        if("V66_CANCEL".equals(action))return cancel();
+        if(!"V66_START".equals(action))return reply("error","Unknown V6.6 action.");
+        if("pending".equals(state))return reply("pending","Another one-message attempt is still active. Cancel it first.");
+        String a=p.optString("app","").toLowerCase(Locale.ROOT).trim();
+        String n=p.optString("name","").replaceAll("\\s+"," ").trim();
+        String m=p.optString("message","").trim();
+        boolean doSend=p.optBoolean("send",false);
+        boolean isClone="whatsapp_clone".equals(a);
+        if(pkg(a).isEmpty()||n.length()<2||n.length()>70||m.length()<1||m.length()>500)
+            return reply("error","Choose a supported app, exact name (2-70 chars) and one message (1-500 chars).");
+        if(doSend&&!p.optBoolean("confirmed",false))return reply("needs_confirmation","Confirm this exact recipient and message before sending.");
+        // Android Accessibility reports the package name, but not the user/profile owning it.
+        // Refuse automatic sends for cloned apps: original and clone can share com.whatsapp.
+        if(isClone&&doSend)return reply("needs_manual_action","Android cannot reliably distinguish original vs cloned WhatsApp in the active window. Search/write a draft, then inspect the clone and press Send yourself.");
+        if(isClone&&!p.optBoolean("cloneConfirmed",false))return reply("needs_confirmation","Verify that you selected the cloned WhatsApp rather than the original.");
+        if(MayaV4AccessService.active==null)return reply("needs_permission","Enable Maya Accessibility to search and type a draft.");
+        String start=MayaV62Automation.start(ctx,a,n);
+        JSONObject opened;
+        try{opened=new JSONObject(start);}catch(Exception ex){return reply("error","App search response unreadable.");}
+        if(!"pending".equals(opened.optString("status")))return start;
+        app=a;name=n;message=m;sendAfterDraft=doSend;cloneConfirmed=isClone;startedAt=SystemClock.uptimeMillis();attempts=0;
+        state="pending";detail="Opening "+a+"; waiting for one exact visible chat and message field. Nothing sent yet.";
+        main.removeCallbacks(poll);main.postDelayed(poll,1800);
+        return status();
+    }
+    private static final Runnable poll=()->check();
+    private static void later(long delay){main.removeCallbacks(poll);main.postDelayed(poll,delay);}
+    private static synchronized void check(){
+        if(!"pending".equals(state))return;
+        if(SystemClock.uptimeMillis()-startedAt>28000){finish("not_verified","Timed out. Chat/UI not verified; no send attempted.");return;}
+        JSONObject sr;try{sr=new JSONObject(MayaV62Automation.state());}catch(Exception e){finish("error","Search result cannot be read.");return;}
+        String ss=sr.optString("status");
+        if("pending".equals(ss)){later(650);return;}
+        if("needs_choice".equals(ss)){finish("needs_choice","Multiple or unverified name matches. Choose manually. Nothing was sent.");return;}
+        if(!"opened_unverified".equals(ss)||!MayaV62Automation.currentSession(app,name)){
+            finish("not_verified","The named chat was not opened reliably. Nothing was sent.");return;
+        }
+        MayaV4AccessService access=MayaV4AccessService.active;
+        if(access==null){finish("needs_permission","Accessibility disconnected before composing.");return;}
+        AccessibilityNodeInfo root=access.getRootInActiveWindow();
+        if(root==null||root.getPackageName()==null||!pkg(app).contentEquals(root.getPackageName())){
+            if(++attempts<8){later(550);return;}
+            finish("not_verified","Expected chat app is not visible. Nothing sent.");return;
+        }
+        AccessibilityNodeInfo compose=findCompose(root);
+        if(compose==null||!chatHeaderExactlyMatches(root,name)){
+            if(++attempts<10){later(600);return;}
+            finish("needs_manual_action","Cannot verify the exact chat header and safe message field. Nothing sent.");return;
+        }
+        Bundle data=new Bundle();data.putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE,message);
+        if(!compose.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT,data)){
+            finish("needs_manual_action","Android did not allow entering the draft. Nothing sent.");return;
+        }
+        if(!sendAfterDraft){finish("draft_entered_unverified","Draft text entered in a chat with the requested visible title. Review and press Send yourself.");return;}
+        // Give app time to enable the Send control. Verify recipient and full draft again.
+        main.postDelayed(()->trySend(),650);
+    }
+    private static synchronized void trySend(){
+        if(!"pending".equals(state)||!sendAfterDraft)return;
+        MayaV4AccessService a=MayaV4AccessService.active;
+        AccessibilityNodeInfo root=a==null?null:a.getRootInActiveWindow();
+        if(root==null||root.getPackageName()==null||!pkg(app).contentEquals(root.getPackageName())||!chatHeaderExactlyMatches(root,name)){
+            finish("not_verified","Chat changed after draft; Send was blocked.");return;
+        }
+        AccessibilityNodeInfo compose=findCompose(root);
+        if(compose==null||!message.equals(String.valueOf(compose.getText()))){finish("not_verified","Draft content changed; Send was blocked.");return;}
+        ArrayList<AccessibilityNodeInfo> sendNodes=new ArrayList<>();HashSet<String> seen=new HashSet<>();
+        for(AccessibilityNodeInfo n:nodes(root)){
+            if(!n.isVisibleToUser()||n.isEditable()||n.isPassword())continue;
+            String d=lower(n.getContentDescription()),t=lower(n.getText()),id=lower(n.getViewIdResourceName());
+            boolean isSend=d.equals("send")||d.equals("send message")||d.equals("send now")||
+              d.equals("পাঠান")||d.equals("পাঠাও")||t.equals("send")||t.equals("পাঠান")||
+              id.endsWith(":id/send")||id.endsWith(":id/send_button")||id.endsWith(":id/send_message");
+            if(!isSend)continue;
+            AccessibilityNodeInfo item=n;for(int j=0;j<4&&item!=null&&!item.isClickable();j++)item=item.getParent();
+            if(item!=null&&item.isClickable()&&item.isEnabled()){
+                Rect b=new Rect();item.getBoundsInScreen(b);if(seen.add(b.flattenToString()))sendNodes.add(item);
+            }
+        }
+        if(sendNodes.size()!=1){finish("needs_manual_action","Could not identify exactly one safe Send button. Draft remains; press Send manually.");return;}
+        boolean clicked=false;try{clicked=sendNodes.get(0).performAction(AccessibilityNodeInfo.ACTION_CLICK);}catch(Exception ignored){}
+        finish(clicked?"sent_unverified":"needs_manual_action",clicked?
+             "Android clicked one visible Send button after exact-name/draft checks. Delivery is NOT verified.":
+             "Android rejected Send tap. Draft remains for manual sending.");
+    }
+    private static String lower(CharSequence c){return c==null?"":c.toString().trim().toLowerCase(Locale.ROOT);}
+    private static List<AccessibilityNodeInfo> nodes(AccessibilityNodeInfo root){
+        ArrayList<AccessibilityNodeInfo> list=new ArrayList<>();if(root==null)return list;list.add(root);
+        for(int i=0;i<list.size()&&list.size()<NODE_LIMIT;i++){
+            AccessibilityNodeInfo n=list.get(i);int max=Math.min(40,n.getChildCount());
+            for(int k=0;k<max&&list.size()<NODE_LIMIT;k++){
+                try{AccessibilityNodeInfo c=n.getChild(k);if(c!=null)list.add(c);}catch(Exception ignored){}
+            }
+        }return list;
+    }
+    private static AccessibilityNodeInfo findCompose(AccessibilityNodeInfo root){
+        AccessibilityNodeInfo found=null;
+        for(AccessibilityNodeInfo n:nodes(root)){
+            if(!n.isVisibleToUser()||!n.isEditable()||n.isPassword())continue;
+            String hint="";try{hint=lower(n.getHintText());}catch(Exception ignored){}
+            String desc=lower(n.getContentDescription()),id=lower(n.getViewIdResourceName());
+            if(hint.contains("search")||hint.contains("সার্চ")||desc.contains("search")||id.contains("search"))continue;
+            boolean msg=hint.contains("message")||hint.contains("type a")||hint.contains("write a")||hint.contains("মেসেজ")||
+                desc.contains("message")||id.contains("message")||id.contains("compose")||id.endsWith(":id/entry")||id.contains("chat_input");
+            if(msg){if(found!=null)return null;found=n;}
+        }return found;
+    }
+    private static boolean chatHeaderExactlyMatches(AccessibilityNodeInfo root,String expected){
+        String e=lower(expected);int height=android.content.res.Resources.getSystem().getDisplayMetrics().heightPixels;
+        for(AccessibilityNodeInfo n:nodes(root)){
+            if(!n.isVisibleToUser()||n.isEditable()||n.isPassword()||!e.equals(lower(n.getText())))continue;
+            Rect b=new Rect();n.getBoundsInScreen(b);
+            if(!b.isEmpty()&&b.top>=0&&b.top<height*0.34f)return true;
+        }return false;
+    }
+}
+JAVA_V66
+
+python3 - <<'PY_V66_BRIDGE'
+from pathlib import Path
+b=Path('android/app/src/main/java/com/tanim/maya/MayaBridge.java')
+s=b.read_text();needle='return MayaControls.run(ctx, act, action, a);'
+assert s.count(needle)==1
+s=s.replace(needle,'if (action != null && action.startsWith("V66_")) return MayaV66ChatFlow.run(ctx,action,a);\n            '+needle,1)
+
+b.write_text(s)
+print('Maya V6.6 bridge registered.')
+PY_V66_BRIDGE
