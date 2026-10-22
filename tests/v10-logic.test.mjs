@@ -113,6 +113,11 @@ const run = async () => {
   r = await api.runTaskPlan([{ summary: 's', tool: 'wikiSummary', args: { topic: 'x' } }], async () => { n2++; return n2 === 1 ? { status: 'error', reason: 'Wikipedia lookup failed: TypeError: Failed to fetch' } : { status: 'ok', title: 'x' }; });
   t('runTaskPlan retries non-throwing transient errors', n2 === 2 && r.run.status === 'done');
 
+  // searchWeb reports transient failures as status 'search_unavailable' — also retried
+  let n4 = 0;
+  r = await api.runTaskPlan([{ summary: 's', tool: 'searchWeb', args: { query: 'q' } }], async () => { n4++; return n4 === 1 ? { status: 'search_unavailable', reason: 'Live grounded search was not available: Cannot reach Google. Check your internet.' } : { status: 'ok', answer: 'x' }; });
+  t('runTaskPlan retries search_unavailable network failures', n4 === 2 && r.run.status === 'done');
+
   // NON-transient error results are NOT retried (validation-style failures)
   let n3 = 0;
   r = await api.runTaskPlan([{ summary: 's', tool: 'getWeather', args: {} }], async () => { n3++; return { status: 'needs_info', reason: 'which city?' }; });
@@ -151,12 +156,13 @@ const run = async () => {
     async (tool) => { executed++; return tool === 'searchWeb' ? { status: 'ok', answer: 'x', meta: { a: 1 } } : { status: 'ok' }; });
   t('runTaskPlan rejects non-text resolved args before execution', executed === 1 && r.run.status === 'failed' && r.run.steps[1].status === 'rejected');
 
-  // overall deadline is enforced per attempt: remaining budget caps each step
+  // expired budget: NO further executor invocation (the retry loop stops before invoking)
+  let invocations = 0;
   r = await api.runTaskPlan(
-    [1, 2, 3].map(i => ({ summary: 's' + i, tool: 'searchWeb', args: { query: 'q' } })),
-    async () => { await new Promise(res => setTimeout(res, 60)); return { status: 'ok' }; },
-    { totalDeadlineMs: 100, stepTimeoutMs: 5000 });
-  t('runTaskPlan enforces overall budget per attempt', r.run.status !== 'done' && r.run.steps.some(s => s.status === 'skipped') && /timed out/.test(r.run.steps.find(s => s.status === 'failed')?.result || ''), JSON.stringify(r.run.steps.map(s => s.status)));
+    [1, 2].map(i => ({ summary: 's' + i, tool: 'searchWeb', args: { query: 'q' } })),
+    async () => { invocations++; await new Promise(res => setTimeout(res, 40)); return { status: 'ok' }; },
+    { totalDeadlineMs: 60, stepTimeoutMs: 5000 });
+  t('expired budget never starts another attempt', invocations === 2 && r.run.status === 'failed' && /budget exhausted/.test(r.run.steps[1].result || ''), JSON.stringify({ invocations, steps: r.run.steps.map(s => s.status) }));
 };
 await run();
 

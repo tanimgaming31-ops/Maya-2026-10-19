@@ -1101,14 +1101,14 @@ async function runTaskPlan(steps, execStep, opts) {
   opts = opts || {};
   const stepTimeoutMs = opts.stepTimeoutMs || 12000;
   const totalDeadline = Date.now() + (opts.totalDeadlineMs || 45000);
-  const RETRYABLE = /timed out|network|failed to fetch|load failed|HTTP 5\d\d|HTTP 429/i;
+  const RETRYABLE = /timed out|network|failed to fetch|load failed|cannot reach|HTTP 5\d\d|HTTP 429/i;
   const run = { steps:steps.map(s => ({ summary:s.summary, tool:s.tool, status:'pending' })), status:'running' };
   const results = [];
   const withTimeout = async (fn, cap) => {
     let t; const guard = new Promise((_, rej) => { t = setTimeout(() => rej(new Error('step timed out')), cap); });
     try { return await Promise.race([fn(), guard]); } finally { clearTimeout(t); }
   };
-  const transient = res => res && res.status === 'error' && RETRYABLE.test(String(res.reason || ''));
+  const transient = res => res && (res.status === 'error' || res.status === 'search_unavailable') && RETRYABLE.test(String(res.reason || ''));
   let failedAt = -1;
   for (let i = 0; i < steps.length; i++) {
     const step = steps[i];
@@ -1122,7 +1122,9 @@ async function runTaskPlan(steps, execStep, opts) {
     if (opts.onProgress) opts.onProgress(run, i);
     let res = null, lastErr = null;
     for (let attempt = 0; attempt < 2; attempt++) {
-      const cap = Math.min(stepTimeoutMs, Math.max(1, totalDeadline - Date.now()));
+      const remaining = totalDeadline - Date.now();
+      if (remaining <= 0) { lastErr = new Error('overall task budget exhausted'); break; } // never start a new attempt past the deadline
+      const cap = Math.min(stepTimeoutMs, remaining);
       try { res = await withTimeout(() => execStep(step.tool, a), cap); }
       catch (e) { lastErr = e; res = null; if (!RETRYABLE.test(String(e && e.message || e))) break; continue; }
       if (transient(res)) { lastErr = new Error(res.reason); res = null; continue; } // non-throwing transient error: retry once

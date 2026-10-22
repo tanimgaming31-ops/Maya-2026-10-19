@@ -13,15 +13,16 @@ Maya tested components 2026-10-19
 - Messenger/IMO recipient/send: USER ACTION REQUIRED
 --- V10 upgrade tests (2026-10-22) ---
 - Full <script> syntax check (Node Function constructor, all 12 blocks): pass
-- tests/v10-logic.test.mjs (node): 53/53 pass
+- tests/v10-logic.test.mjs (node): 54/54 pass
   - retiring Live models removed from DEFAULT_LIVE (gemini-3.1-flash-live-preview, gemini-2.5-flash-native-audio-preview-12-2025 -> shutdown 2026-11-17 per ai.google.dev/gemini-api/docs/deprecations)
   - gemini-3.8-live default; gemini-3.8-live-extended-thinking fallback; gemini-4-argon added as text fallback (flash stays primary)
   - wikiSummary validation, task plan validation ($ref rules: earlier steps only, safe paths), reference resolution (incl. prototype-pollution guards)
-  - runTaskPlan orchestration with fake executor: happy path, reference-string ($1.place) propagation, single retry on transient failure (thrown AND non-throwing network errors), no retry on rejected steps, dependent-step skip on failure, per-attempt overall-budget deadline, progress callbacks
+  - runTaskPlan orchestration with fake executor: happy path, reference-string ($1.place) propagation, single retry on transient failure (thrown AND non-throwing network errors, incl. searchWeb's search_unavailable), no retry on rejected steps, dependent-step skip on failure, per-attempt overall-budget deadline (expired budget never starts another attempt), progress callbacks
   - regression: validateAction (OPEN_APP, unknown action, timer bounds) unchanged
 - Wikipedia REST API + Open-Meteo CORS (access-control-allow-origin: *) verified from a browser-like origin
 - Headless Chromium (Playwright) against a local server: see below
 --- V10 browser smoke test (Playwright headless Chromium, local http server): 26/26 pass ---
+- mid-task socket replacement uses a real interception handshake (held network request), no timing sleeps
 - real tool retry: first Wikipedia request aborted at network level -> one retry -> task completes ok
 - mid-task socket replacement (held network request): task completes and is logged, but its answer is never sent to the replaced session
 - page loads with NO console/page errors; UI initializes (chip, mic)

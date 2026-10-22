@@ -123,29 +123,37 @@ const session4 = await page.evaluate(async () => {
 });
 t('stable session answers both fast tool and task', session4.ids.some(a => a.includes('fc-wiki4')) && session4.ids.some(a => a.includes('fc-task4')), JSON.stringify(session4.ids));
 
-// case D (controlled): socket replaced WHILE a task step is executing (held network request)
-// - use a route that holds the Wikipedia request, replace the socket mid-flight, release,
-//   then assert the task completes + is logged, but its answer is NEVER sent to the new session.
+// case D (controlled handshake): socket replaced WHILE a task step is executing.
+// The Wikipedia request is intercepted and HELD; once interception is confirmed (no sleeps),
+// the socket is replaced, the request is released, and we assert the task completes and
+// is logged but its answer is never sent to the replaced session.
+let releaseHeld;
+const release = new Promise(r => { releaseHeld = r; });
+let requestHeld;
+const held = new Promise(r => { requestHeld = r; });
 await page.route('**/api/rest_v1/page/summary/Maya*', async route => {
-  await new Promise(r => setTimeout(r, 1200)); // hold the request so the task is mid-flight
+  requestHeld();
+  await release;
   await route.continue();
 });
+await page.evaluate(() => {
+  window.__midSent = [];
+  window.__midRealSend = Live.send.bind(Live);
+  Live.send = o => { window.__midSent.push(JSON.parse(JSON.stringify(o))); return true; };
+  window.__midRealWs = Live.ws; window.__midRealActive = app.active;
+  Live.ws = { readyState: 1, fake: true }; app.active = true; Live.ready = true;
+  window.__midP = handleToolCall({ functionCalls: [{ id: 'fc-mid', name: 'runTask', args: { goal: 'mid', steps: [{ summary: 'w', tool: 'wikiSummary', args: { topic: 'Maya civilization' } }] } }] });
+});
+await Promise.race([held, new Promise((_, rej) => setTimeout(() => rej(new Error('route was not intercepted in time')), 15000))]); // handshake: the step's request is now in flight and held
+await page.evaluate(() => { Live.ws = { readyState: 1, fake: 9 }; }); // socket replaced mid-task
+releaseHeld(); // let the held request proceed
 const midTask = await page.evaluate(async () => {
-  const sent = [];
-  const realSend = Live.send.bind(Live);
-  Live.send = o => { sent.push(JSON.parse(JSON.stringify(o))); return true; };
-  const realWs = Live.ws; const realActive = app.active;
-  const fakeWs = { readyState: 1, fake: true };
-  Live.ws = fakeWs; app.active = true; Live.ready = true;
-  try {
-    const p = handleToolCall({ functionCalls: [{ id: 'fc-mid', name: 'runTask', args: { goal: 'mid', steps: [{ summary: 'w', tool: 'wikiSummary', args: { topic: 'Maya civilization' } }] } }] });
-    await new Promise(r => setTimeout(r, 400)); // step now in flight (request held by the route)
-    Live.ws = { readyState: 1, fake: 9 }; // socket replaced mid-task
-    await p;
-    const runs = JSON.parse(localStorage.getItem('maya.tasks') || '[]');
-    const last = runs[runs.length - 1];
-    return { ids: sent.map(s => s.toolResponse.functionResponses.map(f => f.id)), logged: last && last.status };
-  } finally { Live.ws = realWs; app.active = realActive; Live.ready = false; Live.send = realSend; }
+  await window.__midP;
+  const runs = JSON.parse(localStorage.getItem('maya.tasks') || '[]');
+  const last = runs[runs.length - 1];
+  const ids = window.__midSent.map(s => s.toolResponse.functionResponses.map(f => f.id));
+  Live.ws = window.__midRealWs; app.active = window.__midRealActive; Live.ready = false; Live.send = window.__midRealSend;
+  return { ids, logged: last && last.status };
 });
 await page.unroute('**/api/rest_v1/page/summary/Maya*');
 t('mid-task socket replacement: task completes + logs, but no stale answer sent', midTask.ids.length === 0 && midTask.logged === 'done', JSON.stringify(midTask));
@@ -199,7 +207,7 @@ const rec = await page.evaluate(async () => {
 t('recover marks interrupted runs', rec.changed === true && rec.status === 'interrupted', JSON.stringify(rec));
 
 // page errors after all interactions (the only allowed 404 console error is the intentional Wikipedia not_found test)
-const realErrors = errors.filter(e => !/wikipedia\.org.*zzzznotapagexyz123|net::ERR_FAILED/.test(e.url + ' ' + e.text));
+const realErrors = errors.filter(e => !(/zzzznotapagexyz123/.test(e.url) || (/net::ERR_FAILED/.test(e.text) && /summary\/Tokyo/.test(e.url))));
 t('no page errors during interactions', realErrors.length === 0, realErrors.slice(0, 5).map(e => e.text + ' @ ' + e.url).join(' | '));
 console.log('http >=400 responses (informational):', notFound.slice(0, 5).join(' | ') || 'none');
 
