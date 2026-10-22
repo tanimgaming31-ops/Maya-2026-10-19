@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Maya Advanced</title>
+<style>
+body{font-family:system-ui,sans-serif;background:#0b1020;color:#eaf0ff;margin:0;padding:16px}
+.card{background:#151d33;border:1px solid #263252;border-radius:16px;padding:16px;margin-bottom:16px}
+h1{font-size:22px;margin:0 0 12px}h2{font-size:17px;margin:0 0 10px}
+input,select,button{font-size:15px;padding:10px;border-radius:10px;border:1px solid #33406b;background:#0e1530;color:#eaf0ff;width:100%;box-sizing:border-box;margin-bottom:8px}
+button{background:#4f7cff;border:0;font-weight:600;cursor:pointer}
+ul{padding-left:18px;margin:8px 0}
+li{margin-bottom:6px}
+.small{color:#9fb0d8;font-size:13px}
+</style>
+</head>
+<body>
+<h1>Maya Advanced</h1>
+<p class="small">This panel is part of your existing Maya project. It uses the same browser storage and will be connected to the main Maya screen in the next update.</p>
+
+<div class="card">
+<h2>Daily briefing</h2>
+<button id="briefing">Show today’s briefing</button>
+<pre id="briefingOut" class="small"></pre>
+</div>
+
+<div class="card">
+<h2>Add to-do</h2>
+<input id="todoTitle" placeholder="Task title">
+<button id="addTodo">Add to-do</button>
+<ul id="todoList"></ul>
+</div>
+
+<div class="card">
+<h2>Add reminder</h2>
+<input id="reminderTitle" placeholder="Reminder title">
+<input id="reminderTime" type="datetime-local">
+<button id="addReminder">Set reminder</button>
+<ul id="reminderList"></ul>
+</div>
+
+<div class="card">
+<h2>Add calendar event</h2>
+<input id="eventTitle" placeholder="Event title">
+<input id="eventTime" type="datetime-local">
+<button id="addEvent">Add event</button>
+<ul id="eventList"></ul>
+</div>
+
+<script type="module">
+import { addMemory } from "./memory-v2.js";
+import { createTodo, completeTodo, listTodos, createReminder, createCalendarEvent, listToday } from "./productivity.js";
+import { buildDailyBriefing } from "./daily-briefing.js";
+
+const $ = id => document.getElementById(id);
+
+function refresh() {
+  const todos = listTodos();
+  $("todoList").innerHTML = todos.length ? todos.map(t =>
+    `<li>${t.done ? "✅" : "⬜"} ${t.title} <button data-done="${t.id}" style="width:auto;padding:4px 8px;margin-left:8px">Done</button></li>`
+  ).join("") : "<li>No to-do items yet.</li>";
+
+  const today = listToday();
+  $("reminderList").innerHTML = today.reminders.length ? today.reminders.map(r =>
+    `<li>⏰ ${r.title} — ${new Date(r.datetime).toLocaleString()}</li>`
+  ).join("") : "<li>No reminders today.</li>";
+
+  $("eventList").innerHTML = today.events.length ? today.events.map(e =>
+    `<li>📅 ${e.title} — ${new Date(e.datetime).toLocaleString()}</li>`
+  ).join("") : "<li>No events today.</li>";
+}
+
+$("briefing").onclick = () => {
+  $("briefingOut").textContent = buildDailyBriefing();
+};
+
+$("addTodo").onclick = () => {
+  const title = $("todoTitle").value.trim();
+  if (!title) return alert("Please enter a task title.");
+  createTodo({ title });
+  addMemory(`Has a to-do: ${title}`, "plan", "low");
+  $("todoTitle").value = "";
+  refresh();
+};
+
+$("addReminder").onclick = () => {
+  const title = $("reminderTitle").value.trim();
+  const datetime = $("reminderTime").value;
+  if (!title || !datetime) return alert("Please enter a title and time.");
+  createReminder({ title, datetime });
+  $("reminderTitle").value = "";
+  refresh();
+};
+
+$("addEvent").onclick = () => {
+  const title = $("eventTitle").value.trim();
+  const datetime = $("eventTime").value;
+  if (!title || !datetime) return alert("Please enter a title and time.");
+  createCalendarEvent({ title, datetime });
+  $("eventTitle").value = "";
+  refresh();
+};
+
+document.addEventListener("click", event => {
+  const id = event.target?.dataset?.done;
+  if (id) {
+    completeTodo(id);
+    refresh();
+  }
+});
+
+refresh();
+</script>
+</body>
+</html>
