@@ -3232,3 +3232,380 @@ for p in ('android.permission.CALL_PHONE','android.permission.ACCESS_NOTIFICATIO
 man.write_text(s)
 print('Maya V8 registered: call by name, quick panels, DND, ringer, volume, device info, Hey Maya wake.')
 PY_V8_MERGE
+
+# =====================================================================
+# Maya V9 — spoken reminders (snooze / done / repeat, exact timing),
+# read new messages aloud in the background, and voice reply with a
+# one-tap "Send" confirmation. Patches files generated above.
+# =====================================================================
+cat > "$APP_DIR/MayaV9Tools.java" <<'JAVA_V9'
+package com.tanim.maya;
+
+import android.app.ActivityManager;
+import android.app.AlarmManager;
+import android.app.Notification;
+import android.app.NotificationChannel;
+import android.app.NotificationManager;
+import android.app.PendingIntent;
+import android.content.BroadcastReceiver;
+import android.content.Context;
+import android.content.Intent;
+import android.content.SharedPreferences;
+import android.media.AudioDeviceInfo;
+import android.media.AudioManager;
+import android.os.Build;
+import java.util.Calendar;
+import java.util.List;
+import java.util.Locale;
+import java.util.UUID;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+import org.json.JSONObject;
+
+/** Maya V9: reminders that speak, message announcements and confirmed voice replies. */
+public class MayaV9Tools extends BroadcastReceiver {
+    static final String REM_PREFS = "maya_automation_v2";
+    static final String PREFS = "maya_v9";
+    static final String CH_REM = "maya_v9_reminders";
+    static final String CH_MSG = "maya_v9_reply";
+    static final String A_SNOOZE = "com.tanim.maya.V9_SNOOZE";
+    static final String A_DONE = "com.tanim.maya.V9_DONE";
+    static final String A_SEND = "com.tanim.maya.V9_SEND";
+    static final String A_CANCEL = "com.tanim.maya.V9_CANCEL";
+    static volatile String lastMsgId = null, lastSender = null, lastApp = null;
+    static volatile long lastMsgAt = 0, lastSpokenAt = 0;
+    static volatile String lastSpokenSender = "";
+
+    static SharedPreferences prefs(Context c) { return c.getSharedPreferences(PREFS, Context.MODE_PRIVATE); }
+    static SharedPreferences rem(Context c) { return c.getSharedPreferences(REM_PREFS, Context.MODE_PRIVATE); }
+
+    // ---------------------------------------------------------------- bridge
+    static String run(Context c, android.app.Activity act, String action, JSONObject a) {
+        try {
+            SharedPreferences p = prefs(c);
+            switch (action) {
+                case "V9_GET": {
+                    JSONObject o = new JSONObject().put("status", "ok");
+                    o.put("announce", p.getString("announce", "off"));
+                    o.put("headphonesOnly", p.getBoolean("headphonesOnly", false));
+                    o.put("speakReminders", p.getBoolean("speakReminders", true));
+                    o.put("exactAlarms", exactAllowed(c));
+                    o.put("listener", MayaNotificationService.connected);
+                    o.put("headphones", headphones(c));
+                    return o.toString();
+                }
+                case "V9_SET": {
+                    SharedPreferences.Editor e = p.edit();
+                    if (a.has("announce")) {
+                        String m = a.optString("announce", "off");
+                        if (!m.equals("off") && !m.equals("sender") && !m.equals("full")) m = "off";
+                        e.putString("announce", m);
+                    }
+                    if (a.has("headphonesOnly")) e.putBoolean("headphonesOnly", a.optBoolean("headphonesOnly"));
+                    if (a.has("speakReminders")) e.putBoolean("speakReminders", a.optBoolean("speakReminders"));
+                    e.apply();
+                    return MayaControls.res("ok", "Saved.");
+                }
+                case "V9_TEST_SPEAK":
+                    MayaV8Tools.speak(c, a.optString("text", "Hi, this is Maya. I will read your new messages like this."));
+                    return MayaControls.res("ok", "Speaking.");
+                case "V9_EXACT_SETTINGS": {
+                    if (Build.VERSION.SDK_INT >= 31) {
+                        Intent i = new Intent(android.provider.Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM, android.net.Uri.parse("package:" + c.getPackageName()));
+                        i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                        try { c.startActivity(i); return MayaControls.res("ok", "Opened the alarms & reminders permission."); } catch (Exception ignored) {}
+                    }
+                    return MayaControls.res("ok", "Exact reminders are already allowed on this phone.");
+                }
+                default: return MayaControls.res("error", "Unknown V9 action.");
+            }
+        } catch (Exception e) { return MayaControls.res("error", "V9 failed: " + e.getClass().getSimpleName()); }
+    }
+
+    // ------------------------------------------------------------ reminders
+    static boolean exactAllowed(Context c) {
+        if (Build.VERSION.SDK_INT < 31) return true;
+        AlarmManager a = (AlarmManager) c.getSystemService(Context.ALARM_SERVICE);
+        try { return a != null && a.canScheduleExactAlarms(); } catch (Exception e) { return false; }
+    }
+    /** Exact when Android allows it, otherwise the battery-friendly inexact alarm. */
+    static void schedule(Context c, AlarmManager a, long millis, PendingIntent p) {
+        if (a == null) return;
+        try {
+            if (Build.VERSION.SDK_INT >= 23 && exactAllowed(c)) { a.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, millis, p); return; }
+        } catch (Exception ignored) {}
+        if (Build.VERSION.SDK_INT >= 23) a.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, millis, p);
+        else a.set(AlarmManager.RTC_WAKEUP, millis, p);
+    }
+    static PendingIntent remIntent(Context c, String id) {
+        Intent i = new Intent(c, MayaAutomations.class).setAction("com.tanim.maya.REMINDER").putExtra("id", id);
+        return PendingIntent.getBroadcast(c, id.hashCode(), i, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+    }
+    static long next(long at, String repeat, long now) {
+        if (repeat == null || repeat.equals("none") || repeat.isEmpty()) return -1;
+        Calendar cal = Calendar.getInstance(); cal.setTimeInMillis(at);
+        for (int guard = 0; guard < 800 && cal.getTimeInMillis() <= now + 5000; guard++) {
+            if (repeat.equals("weekly")) cal.add(Calendar.DAY_OF_YEAR, 7);
+            else if (repeat.equals("weekdays")) {
+                // Friday & Saturday weekend (UAE / Bangladesh style) when the user picks "workdays".
+                do { cal.add(Calendar.DAY_OF_YEAR, 1); } while (cal.get(Calendar.DAY_OF_WEEK) == Calendar.FRIDAY || cal.get(Calendar.DAY_OF_WEEK) == Calendar.SATURDAY);
+            } else cal.add(Calendar.DAY_OF_YEAR, 1);
+        }
+        return cal.getTimeInMillis();
+    }
+    /** Called when a reminder alarm fires (replaces the plain V2 notification). */
+    static void fire(Context c, String id, String data) {
+        try {
+            JSONObject r = new JSONObject(data);
+            String title = r.optString("title", "Reminder");
+            long nxt = next(r.optLong("at", 0), r.optString("repeat", "none"), System.currentTimeMillis());
+            if (nxt > 0) {
+                r.put("at", nxt);
+                rem(c).edit().putString("rem:" + id, r.toString()).apply();
+                schedule(c, (AlarmManager) c.getSystemService(Context.ALARM_SERVICE), nxt, remIntent(c, id));
+            } else rem(c).edit().remove("rem:" + id).apply();
+            showReminder(c, id, title, nxt > 0);
+            if (prefs(c).getBoolean("speakReminders", true) && canSpeakAloud(c, true)) MayaV8Tools.speak(c, "Reminder. " + title);
+        } catch (Exception ignored) {}
+    }
+    static void bootMissed(Context c, String key, JSONObject r) {
+        try {
+            long nxt = next(r.optLong("at", 0), r.optString("repeat", "none"), System.currentTimeMillis());
+            if (nxt > 0) {
+                r.put("at", nxt);
+                rem(c).edit().putString(key, r.toString()).apply();
+                schedule(c, (AlarmManager) c.getSystemService(Context.ALARM_SERVICE), nxt, remIntent(c, r.getString("id")));
+            } else rem(c).edit().remove(key).apply();
+        } catch (Exception ignored) {}
+    }
+    static void showReminder(Context c, String id, String title, boolean repeats) {
+        if (!MayaAutomations.notificationAllowed(c)) return;
+        NotificationManager nm = (NotificationManager) c.getSystemService(Context.NOTIFICATION_SERVICE);
+        if (nm == null) return;
+        if (Build.VERSION.SDK_INT >= 26) nm.createNotificationChannel(new NotificationChannel(CH_REM, "Maya reminders (loud)", NotificationManager.IMPORTANCE_HIGH));
+        int nid = 30000 + (id.hashCode() & 0xffff);
+        Intent launch = c.getPackageManager().getLaunchIntentForPackage(c.getPackageName());
+        Notification.Builder b = Build.VERSION.SDK_INT >= 26 ? new Notification.Builder(c, CH_REM) : new Notification.Builder(c);
+        b.setSmallIcon(c.getApplicationInfo().icon).setContentTitle("Maya · Reminder").setContentText(title)
+            .setStyle(new Notification.BigTextStyle().bigText(title)).setAutoCancel(true)
+            .setCategory(Notification.CATEGORY_REMINDER).setPriority(Notification.PRIORITY_HIGH).setDefaults(Notification.DEFAULT_ALL);
+        if (launch != null) {
+            launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+            b.setContentIntent(PendingIntent.getActivity(c, nid, launch, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE));
+        }
+        Intent sn = new Intent(c, MayaV9Tools.class).setAction(A_SNOOZE).putExtra("title", title).putExtra("nid", nid);
+        Intent dn = new Intent(c, MayaV9Tools.class).setAction(A_DONE).putExtra("nid", nid);
+        b.addAction(new Notification.Action.Builder(null, "Snooze 10 min", PendingIntent.getBroadcast(c, nid, sn, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE)).build());
+        b.addAction(new Notification.Action.Builder(null, repeats ? "OK" : "Done", PendingIntent.getBroadcast(c, nid + 1, dn, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE)).build());
+        nm.notify(nid, b.build());
+    }
+    static String addReminder(Context c, String title, long at) {
+        try {
+            JSONObject a = new JSONObject().put("title", title).put("at", at).put("repeat", "none");
+            return MayaAutomations.run(c, null, "REMINDER_SET", a);
+        } catch (Exception e) { return null; }
+    }
+
+    // ------------------------------------------------- message announcements
+    static boolean appInFront(Context c) {
+        try {
+            ActivityManager.RunningAppProcessInfo i = new ActivityManager.RunningAppProcessInfo();
+            ActivityManager.getMyMemoryState(i);
+            return i.importance == ActivityManager.RunningAppProcessInfo.IMPORTANCE_FOREGROUND;
+        } catch (Exception e) { return false; }
+    }
+    static boolean headphones(Context c) {
+        try {
+            AudioManager am = (AudioManager) c.getSystemService(Context.AUDIO_SERVICE);
+            if (Build.VERSION.SDK_INT >= 23) {
+                for (AudioDeviceInfo d : am.getDevices(AudioManager.GET_DEVICES_OUTPUTS)) {
+                    int t = d.getType();
+                    if (t == AudioDeviceInfo.TYPE_WIRED_HEADPHONES || t == AudioDeviceInfo.TYPE_WIRED_HEADSET
+                        || t == AudioDeviceInfo.TYPE_BLUETOOTH_A2DP || t == AudioDeviceInfo.TYPE_USB_HEADSET
+                        || (Build.VERSION.SDK_INT >= 31 && (t == 26 /* BLE_HEADSET */))) return true;
+                }
+                return false;
+            }
+            return am.isWiredHeadsetOn() || am.isBluetoothA2dpOn();
+        } catch (Exception e) { return false; }
+    }
+    /** Never talks over a phone call, in Do Not Disturb, or on silent (unless headphones are in). */
+    static boolean canSpeakAloud(Context c, boolean reminder) {
+        try {
+            AudioManager am = (AudioManager) c.getSystemService(Context.AUDIO_SERVICE);
+            int mode = am.getMode();
+            if (mode == AudioManager.MODE_IN_CALL || mode == AudioManager.MODE_IN_COMMUNICATION || mode == AudioManager.MODE_RINGTONE) return false;
+            boolean hp = headphones(c);
+            if (hp) return true;
+            NotificationManager nm = (NotificationManager) c.getSystemService(Context.NOTIFICATION_SERVICE);
+            if (Build.VERSION.SDK_INT >= 23 && nm != null && nm.getCurrentInterruptionFilter() > NotificationManager.INTERRUPTION_FILTER_ALL) return false;
+            return am.getRingerMode() == AudioManager.RINGER_MODE_NORMAL;
+        } catch (Exception e) { return reminder; }
+    }
+    static void announce(Context c, String app, String sender, String text, String id) {
+        try {
+            lastMsgId = id; lastSender = sender; lastApp = app; lastMsgAt = System.currentTimeMillis();
+            String mode = prefs(c).getString("announce", "off");
+            if (mode.equals("off") || appInFront(c)) return;
+            if (prefs(c).getBoolean("headphonesOnly", false) && !headphones(c)) return;
+            if (!canSpeakAloud(c, false)) return;
+            long now = System.currentTimeMillis();
+            boolean same = sender != null && sender.equals(lastSpokenSender) && now - lastSpokenAt < 20000;
+            lastSpokenAt = now; lastSpokenSender = sender == null ? "" : sender;
+            String who = sender == null || sender.isEmpty() ? "someone" : sender;
+            String t = text == null ? "" : text.trim();
+            if (t.length() > 220) t = t.substring(0, 220) + "…";
+            if (mode.equals("full")) MayaV8Tools.speak(c, (same ? "" : app + " message from " + who + ". ") + t);
+            else if (!same) MayaV8Tools.speak(c, "New " + app + " message from " + who + ".");
+        } catch (Exception ignored) {}
+    }
+
+    // ------------------------------------------------------- background voice
+    static String nfc(String s) { return java.text.Normalizer.normalize(s, java.text.Normalizer.Form.NFC); }
+    static String digits(String s) {
+        StringBuilder b = new StringBuilder();
+        for (char ch : s.toCharArray()) {
+            if (ch >= '\u09E6' && ch <= '\u09EF') b.append((char) ('0' + (ch - '\u09E6')));
+            else if (ch >= '\u0966' && ch <= '\u096F') b.append((char) ('0' + (ch - '\u0966')));
+            else b.append(ch);
+        }
+        return b.toString();
+    }
+    static int num(String s) {
+        s = s.trim().toLowerCase(Locale.ROOT);
+        try { return Integer.parseInt(s); } catch (Exception ignored) {}
+        String[][] w = {{"one","এক","1"},{"a","1"},{"an","1"},{"two","দুই","2"},{"three","তিন","3"},{"four","চার","4"},{"five","পাঁচ","5"},{"ten","দশ","10"},{"fifteen","পনেরো","15"},{"twenty","বিশ","20"},{"thirty","ত্রিশ","30"},{"forty","চল্লিশ","40"},{"half","আধা","আধ","30m"}};
+        for (String[] r : w) for (int i = 0; i < r.length - 1; i++) if (r[i].equals(s)) return r[r.length - 1].equals("30m") ? -30 : Integer.parseInt(r[r.length - 1]);
+        return 0;
+    }
+    static boolean voice(Context c, String words) {
+        String w = nfc(digits(words == null ? "" : words.trim().toLowerCase(Locale.ROOT)));
+        if (w.isEmpty()) return false;
+        // 1) "remind me in 10 minutes to call mum" / "১০ মিনিট পরে মনে করিয়ে দিও মাকে ফোন"
+        Matcher m = Pattern.compile("^remind me (?:in|after) (\\w+) (minutes?|mins?|hours?|hrs?)(?: to| about| that)? (.+)$").matcher(w);
+        Matcher mb = Pattern.compile(nfc("^(\\S+) (মিনিট|ঘন্টা|ঘণ্টা) (?:পরে|পর) (?:আমাকে )?(?:মনে করিয়ে দিও|মনে করিয়ে দাও|মনে করাবে|মনে করিয়ে দিবে|রিমাইন্ড করো)(?: যে)? ?(.*)$")).matcher(w);
+        String qty = null, unit = null, what = null;
+        if (m.find()) { qty = m.group(1); unit = m.group(2); what = m.group(3); }
+        else if (mb.find()) { qty = mb.group(1); unit = mb.group(2); what = mb.group(3); }
+        if (qty != null) {
+            int n = num(qty);
+            boolean hour = unit.startsWith("h") || unit.startsWith("ঘ");
+            long mins = n == -30 ? 30 : (hour ? n * 60L : n);
+            if (n == -30 && !hour) mins = 1;
+            if (mins < 1 || mins > 24 * 60 * 7) { MayaV8Tools.speak(c, "Please say how many minutes or hours."); return true; }
+            if (what == null || what.trim().isEmpty()) what = "Reminder";
+            String title = what.trim(); if (title.length() > 120) title = title.substring(0, 120);
+            String r = addReminder(c, Character.toUpperCase(title.charAt(0)) + title.substring(1), System.currentTimeMillis() + mins * 60000L);
+            boolean ok = r != null && r.contains("scheduled");
+            MayaV8Tools.speak(c, ok ? "Okay. I will remind you in " + (mins % 60 == 0 && mins >= 60 ? (mins / 60) + (mins == 60 ? " hour." : " hours.") : mins + (mins == 1 ? " minute." : " minutes.")) : "I could not save that reminder.");
+            return true;
+        }
+        // 2) "read my messages" / "মেসেজ পড়ো" / "কে মেসেজ দিয়েছে"
+        if (w.matches(nfc("^(read (my )?(new |last )?messages?|any (new )?messages?|who (messaged|texted) me|মেসেজ (পড়|পড়ো|পড়ে শোনাও|শোনাও)|কে মেসেজ (দিয়েছে|দিল|করেছে)|নতুন মেসেজ (আছে|কি)|मैसेज (पढ़ो|सुनाओ)).*"))) {
+            if (!MayaNotificationService.connected) { MayaV8Tools.speak(c, "Please allow notification access for Maya first."); return true; }
+            List<MayaNotificationService.Msg> list = MayaNotificationService.recent(3, null);
+            if (list.isEmpty()) { MayaV8Tools.speak(c, "No new messages."); return true; }
+            StringBuilder b = new StringBuilder();
+            for (MayaNotificationService.Msg x : list) {
+                String t = x.text.length() > 160 ? x.text.substring(0, 160) + "…" : x.text;
+                b.append(x.app).append(", ").append(x.sender).append(": ").append(t).append(". ");
+            }
+            MayaNotificationService.Msg first = list.get(0);
+            lastMsgId = first.id; lastSender = first.sender; lastApp = first.app; lastMsgAt = System.currentTimeMillis();
+            MayaV8Tools.speak(c, b.toString());
+            return true;
+        }
+        // 3) "reply I'm coming" / "উত্তর দাও আসছি" → confirmation card, nothing is sent until you tap Send.
+        Matcher rp = Pattern.compile(nfc("^(?:reply|answer|reply to (?:him|her|them|it)|উত্তর দাও|রিপ্লাই দাও|রিপ্লাই করো|জবাব দাও|जवाब दो|रिप्लाई करो)[,:]?\\s+(.+)$")).matcher(w);
+        if (rp.find()) {
+            String raw = nfc(words.trim()); String text = raw.length() >= rp.group(1).length() ? raw.substring(raw.length() - rp.group(1).length()).trim() : rp.group(1);
+            if (lastMsgId == null || System.currentTimeMillis() - lastMsgAt > 15 * 60000L) { MayaV8Tools.speak(c, "I don't know which message to reply to. Say: Maya, read my messages."); return true; }
+            confirmReply(c, lastMsgId, lastSender, lastApp, text);
+            MayaV8Tools.speak(c, "Tap send on the notification to reply to " + lastSender + ".");
+            return true;
+        }
+        return false;
+    }
+    static void confirmReply(Context c, String id, String sender, String app, String text) {
+        NotificationManager nm = (NotificationManager) c.getSystemService(Context.NOTIFICATION_SERVICE);
+        if (nm == null) return;
+        if (Build.VERSION.SDK_INT >= 26) nm.createNotificationChannel(new NotificationChannel(CH_MSG, "Maya reply confirmations", NotificationManager.IMPORTANCE_HIGH));
+        int nid = 8909;
+        Intent send = new Intent(c, MayaV9Tools.class).setAction(A_SEND).putExtra("id", id).putExtra("text", text).putExtra("sender", sender).putExtra("nid", nid);
+        Intent cancel = new Intent(c, MayaV9Tools.class).setAction(A_CANCEL).putExtra("nid", nid);
+        Notification.Builder b = Build.VERSION.SDK_INT >= 26 ? new Notification.Builder(c, CH_MSG) : new Notification.Builder(c);
+        b.setSmallIcon(c.getApplicationInfo().icon).setContentTitle("Reply to " + sender + " (" + app + ")?")
+            .setContentText("“" + text + "”").setStyle(new Notification.BigTextStyle().bigText("“" + text + "”\nNothing is sent until you tap Send."))
+            .setPriority(Notification.PRIORITY_HIGH).setAutoCancel(true)
+            .addAction(new Notification.Action.Builder(null, "Send", PendingIntent.getBroadcast(c, 8910, send, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE)).build())
+            .addAction(new Notification.Action.Builder(null, "Cancel", PendingIntent.getBroadcast(c, 8911, cancel, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE)).build());
+        nm.notify(nid, b.build());
+    }
+
+    // ------------------------------------------------ notification buttons
+    @Override public void onReceive(Context c, Intent i) {
+        if (i == null || i.getAction() == null) return;
+        NotificationManager nm = (NotificationManager) c.getSystemService(Context.NOTIFICATION_SERVICE);
+        int nid = i.getIntExtra("nid", 0);
+        try {
+            switch (i.getAction()) {
+                case A_SNOOZE: {
+                    if (nm != null) nm.cancel(nid);
+                    String t = i.getStringExtra("title"); if (t == null || t.isEmpty()) t = "Reminder";
+                    addReminder(c, t, System.currentTimeMillis() + 10 * 60000L);
+                    break;
+                }
+                case A_DONE: case A_CANCEL: if (nm != null) nm.cancel(nid); break;
+                case A_SEND: {
+                    if (nm != null) nm.cancel(nid);
+                    String err = MayaNotificationService.sendReply(c, i.getStringExtra("id"), i.getStringExtra("text"));
+                    MayaV8Tools.speak(c, err == null ? "Reply handed to the app." : err);
+                    break;
+                }
+            }
+        } catch (Exception ignored) {}
+    }
+}
+JAVA_V9
+
+python3 - <<'PY_V9_MERGE'
+from pathlib import Path
+base=Path('android/app/src/main/java/com/tanim/maya')
+b=base/'MayaBridge.java'; s=b.read_text()
+needle='if (action != null && action.startsWith("V8_")) return MayaV8Tools.run(ctx, act, action, a);'
+assert s.count(needle)==1, 'V8 bridge dispatch missing'
+s=s.replace(needle,'if (action != null && action.startsWith("V9_")) return MayaV9Tools.run(ctx, act, action, a);\n            '+needle,1)
+b.write_text(s)
+a=base/'MayaAutomations.java'; s=a.read_text()
+old_fire='prefs(c).edit().remove("rem:"+id).apply();\n            try { JSONObject r=new JSONObject(data); alert(c,"Maya · Reminder",r.optString("title","Reminder"), id.hashCode()); } catch(Exception ignored) {}'
+assert s.count(old_fire)==1, 'reminder fire changed'
+s=s.replace(old_fire,'MayaV9Tools.fire(c, id, data);',1)
+old_boot='if(t>now) scheduleReminder(c,r.getString("id"),t);\n                    else prefs(c).edit().remove(e.getKey()).apply();'
+assert s.count(old_boot)==1, 'boot loop changed'
+s=s.replace(old_boot,'if(t>now) scheduleReminder(c,r.getString("id"),t);\n                    else MayaV9Tools.bootMissed(c, e.getKey(), r);',1)
+old_sched='if (Build.VERSION.SDK_INT >= 23) a.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, millis, p);\n        else a.set(AlarmManager.RTC_WAKEUP, millis, p);'
+assert s.count(old_sched)==1, 'scheduleReminder changed'
+s=s.replace(old_sched,'MayaV9Tools.schedule(c, a, millis, p);',1)
+old_rec='JSONObject record=new JSONObject().put("id",id).put("title",title).put("at",at);'
+assert s.count(old_rec)==1
+s=s.replace(old_rec,'String rep=a.optString("repeat","none"); if(!rep.equals("daily")&&!rep.equals("weekdays")&&!rep.equals("weekly")) rep="none";\n                    JSONObject record=new JSONObject().put("id",id).put("title",title).put("at",at).put("repeat",rep);',1)
+a.write_text(s)
+n=base/'MayaNotificationService.java'; s=n.read_text()
+old='        MayaBridge.emit(m.toJson());\n    }\n}'
+assert s.count(old)==1, 'listener emit changed'
+s=s.replace(old,'        MayaBridge.emit(m.toJson());\n        MayaV9Tools.announce(this, m.app, m.sender, m.text, m.id);\n    }\n}',1)
+n.write_text(s)
+c=base/'MayaV4Controls.java'; s=c.read_text()
+old='        if (MayaV8Tools.voice(ctx, words)) return;\n'
+assert s.count(old)==1
+s=s.replace(old,'        if (MayaV9Tools.voice(ctx, words)) return;\n'+old,1)
+c.write_text(s)
+man=Path('android/app/src/main/AndroidManifest.xml'); s=man.read_text()
+for p in ('android.permission.SCHEDULE_EXACT_ALARM','android.permission.USE_EXACT_ALARM','android.permission.RECEIVE_BOOT_COMPLETED','android.permission.POST_NOTIFICATIONS'):
+    if f'"{p}"' not in s:
+        s=s.replace('<application',f'<uses-permission android:name="{p}" />\n    <application',1)
+if 'com.tanim.maya.MayaV9Tools' not in s:
+    s=s.replace('</application>','<receiver android:name="com.tanim.maya.MayaV9Tools" android:exported="false" />\n    </application>',1)
+man.write_text(s)
+print('Maya V9 registered: spoken reminders (snooze/repeat/exact), message announcements, confirmed voice reply.')
+PY_V9_MERGE

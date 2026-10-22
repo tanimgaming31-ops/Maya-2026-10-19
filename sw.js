@@ -1,4 +1,4 @@
-const V = 'maya-v8-20261022';
+const V = 'maya-v9-20261022';
 // App shell is network-first (always fresh); heavy static files (3D engine, model, icons) are cache-first for speed.
 const SHELL = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png'];
 const STATIC = /\/(vendor\/.+|maya\.vrm|icon-\d+\.png)$/;

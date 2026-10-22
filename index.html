@@ -302,6 +302,14 @@ input[type=range]{width:130px;accent-color:var(--c)}
   <div id="v3SocialResult" class="msg" aria-live="polite">No action yet. No chat sent.</div>
 
   
+  <h3>Maya V9 — Spoken reminders &amp; messages</h3>
+  <p class="note">When a reminder is due, Maya rings, says it out loud and offers Snooze 10 min. Reminders can repeat every day, every workday or every week. Maya can also read new WhatsApp, Messenger, IMO, Telegram and SMS messages aloud while the app is closed. She stays quiet during calls, in Do Not Disturb and on silent (unless headphones are in). Codes and passwords are never read. In the background say "Maya, read my messages", "Maya, reply I'm coming" (a Send button appears, nothing is sent until you tap it) or "Maya, remind me in 20 minutes to drink water".</p>
+  <div class="row"><div>Read new messages aloud<small>Needs notification access for Maya (Settings above).</small></div><select id="v9Announce" class="inp" style="max-width:170px"><option value="off">Off</option><option value="sender">Only who sent it</option><option value="full">Sender + message</option></select></div>
+  <div class="row"><div>Only with headphones<small>Read messages aloud only when earphones or Bluetooth headphones are connected.</small></div><input type="checkbox" class="sw" id="v9Headphones"></div>
+  <div class="row"><div>Say reminders out loud<small>Maya speaks the reminder text when it rings.</small></div><input type="checkbox" class="sw" id="v9SpeakRem" checked></div>
+  <div class="krow"><button class="btn" id="v9Test">Test Maya's voice</button><button class="btn" id="v9Exact">Exact-time reminders</button></div>
+  <p class="msg" id="v9Out" aria-live="polite">Available in the Android app.</p>
+
   <h3>Maya V8 — Smart brain &amp; phone control</h3>
   <p class="note">Maya can now keep notes and a to-do list, check live weather, do exact math, tell the time anywhere, give a daily briefing, and remember earlier conversations (saved only on this phone). In the Android app she can call a contact by name (she always asks first), open Wi-Fi / Bluetooth / internet panels, switch do-not-disturb, ringer mode and exact volume, and read device info. Background voice: say "Hey Maya" even with the screen off and she opens and listens.</p>
   <div class="row"><div>Home city<small>Used for weather and the daily briefing.</small></div><input id="v8HomeCity" class="inp" maxlength="80" placeholder="e.g. Dubai" style="max-width:160px"></div>
@@ -383,9 +391,10 @@ input[type=range]{width:130px;accent-color:var(--c)}
   <div class="krow"><select id="v52Routine" class="inp" style="flex:1;min-width:160px"><option value="home_lock">Go Home, then Lock</option><option value="back_home">Back, then Home</option><option value="pause_home">Pause music, then Home</option><option value="scroll_twice">Scroll down twice</option></select><button class="btn" id="v52RunRoutine">Run permitted routine</button></div>
   <p class="msg" id="v52Status" aria-live="polite">V5.2 actions are available only in a built Android APK after granting permissions.</p>
 <h3>Phone reminders</h3>
-  <p class="note">Reminders are stored only on this device, rescheduled after restart, and may arrive late in Android battery-saving mode. Notification permission is required.</p>
+  <p class="note">Reminders are stored only on this device and rescheduled after restart. Maya rings, says the reminder out loud and offers Snooze 10 min. You can also just say "Maya, remind me in 20 minutes to drink water". Notification permission is required.</p>
   <input id="v2ReminderTitle" class="inp wide" maxlength="120" placeholder="What should Maya remind you about?">
-  <div class="krow"><input type="datetime-local" id="v2ReminderTime" class="inp" style="flex:1;min-width:175px"><button class="btn pri" id="v2ReminderAdd">Add reminder</button></div>
+  <div class="krow"><input type="datetime-local" id="v2ReminderTime" class="inp" style="flex:1;min-width:175px"><select id="v9Repeat" class="inp" style="flex:0 0 auto;width:auto"><option value="none">Once</option><option value="daily">Every day</option><option value="weekdays">Workdays (Sun–Thu)</option><option value="weekly">Every week</option></select></div>
+  <div class="krow"><button class="btn pri" id="v2ReminderAdd">Add reminder</button></div>
   <div id="v2Reminders" class="msg">Open the Android APK to manage reminders.</div>
 
   <h3>AI photo reader & translator</h3>
@@ -653,6 +662,12 @@ function validateAction(args, now, enabled) {
     case 'CREATE_ALARM': if ((e = checkClock(args, p))) return fail(e); p.label = str(args.label, 40); break;
     case 'CREATE_REMINDER': {
       p.title = str(args.title, 120); if (!p.title) return fail('Tell me what you want to remember.');
+      const rpt = String(args.repeat || 'none').toLowerCase(); p.repeat = ['daily','weekdays','weekly'].includes(rpt) ? rpt : 'none';
+      if (args.in_minutes != null && args.in_minutes !== '') {
+        const im = Number(args.in_minutes);
+        if (!Number.isFinite(im) || im < 1 || im > 525600) return fail('in_minutes must be 1 to 525600.');
+        p.at = Math.round((now || Date.now()) + im * 60000); break;
+      }
       const dateTime = str(args.date_time, 30);
       if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(dateTime)) return fail('Exact local date_time YYYY-MM-DDTHH:mm required. Ask the person for the date and time.');
       const at = new Date(dateTime).getTime();
@@ -762,7 +777,7 @@ function summarize(action, p) {
     case 'START_TIMER': return 'Start a ' + fmtDur(p.seconds) + ' timer' + (p.label ? ' (' + p.label + ')' : '');
     case 'CREATE_CALENDAR_EVENT': return 'Prepare calendar event “' + p.title + '” on ' + p.date + ' at ' + fmt12(p.hour24, p.minute) + ' for ' + p.duration_minutes + ' min' + (p.location ? ' at ' + p.location : '');
     case 'SEND_SMS': return 'Send a text message to ' + (p.contact_name ? p.contact_name + ' (' + p.phone + ')' : p.phone) + ': “' + p.message + '”';
-    case 'CREATE_REMINDER': return 'Set reminder for ' + new Date(p.at).toLocaleString() + ': ' + p.title;
+    case 'CREATE_REMINDER': return 'Set reminder for ' + new Date(p.at).toLocaleString() + (p.repeat && p.repeat !== 'none' ? ' (repeats ' + p.repeat + ')' : '') + ': ' + p.title;
     case 'REPLY_NOTIFICATION': return 'Reply to ' + (p.sender || 'this chat') + (p.app ? ' on ' + p.app : '') + ': “' + p.message + '”';
     default: return action;
   }
@@ -811,7 +826,7 @@ function planAction(action, p, now) {
     case 'FACEBOOK_SEARCH': {const u='https://www.facebook.com/search/top/?q='+enc(p.query);return {kind:'link',href:u,label:'Search Facebook',native:{action:'OPEN_URL',url:u,pkg:'com.facebook.katana'},bestEffort:true};}
     case 'WEB_SEARCH': return { kind:'link', href:'https://www.google.com/search?q=' + enc(p.query), label:'Search the web' };
     case 'YOUTUBE_SEARCH': { const u = 'https://www.youtube.com/results?search_query=' + enc(p.query); return { kind:'link', href:appIntent(u, 'com.google.android.youtube'), label:'Search YouTube', native:{ action:'OPEN_URL', url:u, pkg:'com.google.android.youtube' } }; }
-    case 'CREATE_REMINDER': return {kind:'native-reminder',label:p.title,at:p.at};
+    case 'CREATE_REMINDER': return {kind:'native-reminder',label:p.title,at:p.at,repeat:p.repeat||'none'};
     case 'FLASHLIGHT_ON': case 'FLASHLIGHT_OFF': case 'MEDIA_PLAY': case 'MEDIA_PAUSE': case 'MEDIA_NEXT': case 'MEDIA_PREVIOUS': case 'CHANGE_MEDIA_VOLUME': case 'CHANGE_BRIGHTNESS': case 'SEND_SMS': return { kind:'native-control' };
     case 'READ_NOTIFICATION': return { kind:'native-read' };
     case 'REPLY_NOTIFICATION': return { kind:'native-reply' };
@@ -948,7 +963,9 @@ function toolDeclarations(native) {
       seconds:{ type:'INTEGER', description:'START_TIMER: duration in seconds.' },
       label:S('Optional label for a timer or alarm.'),
       hour24:{ type:'INTEGER', description:'CREATE_ALARM / CREATE_CALENDAR_EVENT: hour, 0-23.' },
-      date_time:S('CREATE_REMINDER: exact LOCAL date-time YYYY-MM-DDTHH:mm, user must specify both date and time; do not invent.'),
+      date_time:S('CREATE_REMINDER: exact LOCAL date-time YYYY-MM-DDTHH:mm, user must specify both date and time; do not invent. For relative times ("in 20 minutes", "after 2 hours") use in_minutes instead.'),
+      in_minutes:{ type:'INTEGER', description:'CREATE_REMINDER: minutes from now, for relative requests like "in 20 minutes" (20) or "in 2 hours" (120).' },
+      repeat:S('CREATE_REMINDER: repeat every day, every workday (Sun-Thu) or every week; default none.', { enum:['none','daily','weekdays','weekly'] }),
       minute:{ type:'INTEGER', description:'Minute, 0-59.' },
       ampm_stated:{ type:'BOOLEAN', description:'True only if the person clearly said AM/PM or 24-hour time.' },
       title:S('CREATE_CALENDAR_EVENT event title, or CREATE_REMINDER reminder text.'),
@@ -1451,7 +1468,7 @@ async function runPlan(action, p) {
     }
     case 'native-reminder': {
       if (!hasNative()) return { status:'unsupported', reason:'Reminders require the Android APK.' };
-      const r = await nativeControl('REMINDER_SET', { title:plan.label, at:plan.at });
+      const r = await nativeControl('REMINDER_SET', { title:plan.label, at:plan.at, repeat:plan.repeat||'none' });
       refreshV2(); return r;
     }
     case 'link': {
@@ -1933,7 +1950,7 @@ async function refreshV2() {
   if (!arr.length) { list.textContent = 'No upcoming reminders.'; return; }
   for (const r of arr) {
     const row = document.createElement('div'); row.className='row';
-    const info=document.createElement('div'); info.textContent=v2Safe(r.title); const small=document.createElement('small');small.textContent=new Date(r.at).toLocaleString();info.append(small);
+    const info=document.createElement('div'); info.textContent=v2Safe(r.title); const small=document.createElement('small');small.textContent=new Date(r.at).toLocaleString()+({daily:' · every day',weekdays:' · workdays',weekly:' · every week'}[r.repeat]||'');info.append(small);
     const del=document.createElement('button');del.className='btn sm';del.textContent='Cancel';del.onclick=async()=>{
       if (!await ask('Cancel reminder?',v2Safe(r.title),'Cancel reminder','Keep')) return;
       const out=v2native('REMINDER_CANCEL',{id:r.id});toast(out.message || out.status, out.status==='ok'?'ok':'err');refreshV2();
@@ -1953,7 +1970,7 @@ $('#v2ReminderAdd').onclick = async () => {
   const at=new Date(raw).getTime();
   if(!title||!raw||!Number.isFinite(at)||at<Date.now()+10000){toast('Enter a reminder and a valid future date/time.','err');return;}
   if(!await ask('Save reminder?', title+' · '+new Date(at).toLocaleString(),'Save reminder','Cancel'))return;
-  const r=v2native('REMINDER_SET',{title,at});toast(r.message||r.status,r.status==='scheduled'?'ok':'err',5200);
+  const r=v2native('REMINDER_SET',{title,at,repeat:($('#v9Repeat')||{}).value||'none'});toast(r.message||r.status,r.status==='scheduled'?'ok':'err',5200);
   if(r.status==='scheduled')$('#v2ReminderTitle').value='';refreshV2();
 };
 let selectedVisionImage=null;
@@ -2916,6 +2933,7 @@ function wire(){
   buildSystemPrompt=function(o){
     let s=bsp(o);
     s+='\n\nSMART TOOLS (V8): For any math use calculate — never do arithmetic in your head. For weather use getWeather, for time use getTime. Use notes for to-dos and quick notes ("remind me to buy milk" without a time → a todo; with a time → a reminder action). Use recallConversation when they refer to an earlier chat. Use dailyBriefing for a briefing or "how does my day look". Speak results naturally and briefly; do not read out ids or JSON.';
+    if(o&&o.native)s+='\nREMINDERS (V9): For "in 20 minutes" / "after 2 hours" use androidAction CREATE_REMINDER with in_minutes (no date math). For "every day at 8", "every morning", "every week" set repeat (daily/weekdays/weekly) with the first date_time. When it fires the phone rings, Maya says it aloud, and there is a Snooze 10 min button. MESSAGES: if they want new messages read aloud while the app is closed, tell them to turn on "Read new messages aloud" in Settings > Maya V9. In the background they can say "Maya, read my messages" and "Maya, reply <text>" — a Send button appears and nothing is sent until they tap it.';
     if(o&&o.native)s+=' phoneControl handles calling a contact by name (always confirm first), Wi-Fi/Bluetooth/internet panels, do-not-disturb, ringer mode, exact volume and device info.';
     const home=L.get('homeCity','');if(home)s+='\nThe person\'s home city: '+clip(home,60)+'.';
     const todos=V8.notes.all().filter(x=>x.kind==='todo'&&!x.done);if(todos.length)s+='\nOPEN TO-DOS (mention only if relevant): '+todos.slice(-5).map(x=>x.text).join('; ')+'.';
@@ -2974,6 +2992,32 @@ function ui(){
   V8.renderNotes();V8.renderHistory();
 }
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',ui);else ui();
+})();
+</script>
+<script>
+/* ---------------- Maya V9: spoken reminders & message announcements (settings) ---------------- */
+(function(){
+const $i=id=>document.getElementById(id);
+const nat=()=>typeof hasNative==='function'&&hasNative()&&window.MayaBridge&&typeof window.MayaBridge.control==='function';
+const call=(a,o)=>{try{return JSON.parse(window.MayaBridge.control(a,JSON.stringify(o||{})));}catch(e){return{status:'error',message:String(e.message||e)};}};
+function refresh(){
+  const out=$i('v9Out');if(!out)return;
+  if(!nat()){out.textContent='These options work in the Maya Android app.';['v9Announce','v9Headphones','v9SpeakRem','v9Test','v9Exact'].forEach(id=>{const e=$i(id);if(e)e.disabled=true;});return;}
+  const r=call('V9_GET');if(r.status!=='ok'){out.textContent=r.message||'Update the Maya app to use V9.';return;}
+  $i('v9Announce').value=r.announce;$i('v9Headphones').checked=!!r.headphonesOnly;$i('v9SpeakRem').checked=r.speakReminders!==false;
+  out.textContent='Notification access: '+(r.listener?'on':'off — turn it on so Maya can see new messages')+' · Exact-time reminders: '+(r.exactAlarms?'allowed':'not allowed (reminders may be a few minutes late)')+(r.headphones?' · Headphones connected':'');
+}
+function init(){
+  if(!$i('v9Out'))return;
+  const save=()=>{if(!nat())return;const r=call('V9_SET',{announce:$i('v9Announce').value,headphonesOnly:$i('v9Headphones').checked,speakReminders:$i('v9SpeakRem').checked});if(typeof toast==='function')toast(r.status==='ok'?'Saved':(r.message||'Could not save'),r.status==='ok'?'ok':'err',1500);refresh();};
+  $i('v9Announce').onchange=save;$i('v9Headphones').onchange=save;$i('v9SpeakRem').onchange=save;
+  $i('v9Test').onclick=()=>{const r=call('V9_TEST_SPEAK',{});$i('v9Out').textContent=r.message||r.status;};
+  $i('v9Exact').onclick=()=>{const r=call('V9_EXACT_SETTINGS',{});$i('v9Out').textContent=r.message||r.status;setTimeout(refresh,4000);};
+  refresh();
+  const b=document.getElementById('btnSet');if(b)b.addEventListener('click',()=>setTimeout(refresh,300));
+}
+window.MayaV9={refresh};
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init);else init();
 })();
 </script>
 </body>
