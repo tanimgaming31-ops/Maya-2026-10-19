@@ -1,40 +1,31 @@
 name: Build Maya APK
-
 on:
   workflow_dispatch:
-
 permissions:
   contents: write
-
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: 17
-
       - name: Collect web files
         run: |
           mkdir -p www
           cp index.html manifest.webmanifest sw.js icon-192.png icon-512.png www/
-          # V8: bundled 3D engine + 3D Maya model so they work offline in the app
           cp -r vendor www/
+          cp -r maya-features www/
           if [ -f maya.vrm ]; then cp maya.vrm www/; fi
-
       - name: Install Capacitor
         run: npm install
-
       - name: Create Android project
         run: npx cap add android
-
       - name: Load private signing key (optional, for seamless updates)
         env:
           MAYA_SIGNING_KEY_B64: ${{ secrets.MAYA_SIGNING_KEY_B64 }}
@@ -46,29 +37,23 @@ jobs:
           else
             echo "No signing secret configured. A new debug key will be used; it may not update a previous installation."
           fi
-
       - name: Add Maya native features
         run: |
           if [ -f setup-native.sh ]; then bash setup-native.sh; fi
-
       - name: Add permissions (microphone, camera)
         run: |
           sed -i 's#<application#<uses-permission android:name="android.permission.RECORD_AUDIO" />\n    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />\n    <uses-permission android:name="android.permission.CAMERA" />\n    <application#' android/app/src/main/AndroidManifest.xml
           grep -n "uses-permission" android/app/src/main/AndroidManifest.xml
-
       - name: Sync web files into the app
         run: npx cap sync android
-
       - name: Build APK
         working-directory: android
         run: ./gradlew assembleDebug --no-daemon
-
       - name: Keep a copy as a build artifact
         uses: actions/upload-artifact@v4
         with:
           name: Maya-apk
           path: android/app/build/outputs/apk/debug/app-debug.apk
-
       - name: Publish a download link (GitHub Release)
         env:
           GH_TOKEN: ${{ github.token }}
