@@ -136,7 +136,7 @@ input[type=range]{width:130px;accent-color:var(--c)}
 .note{font-size:12.5px;color:var(--dim);line-height:1.45;margin-top:14px}
 @media (max-height:640px){.mic{width:70px;height:70px}.caps{min-height:76px}#sub{font-size:16px}}
 </style>
-<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.164.1/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.164.1/examples/jsm/"}}</script>
+<script type="importmap">{"imports":{"three":"./vendor/three/three.module.min.js","three/addons/":"./vendor/three/addons/","@pixiv/three-vrm":"./vendor/three-vrm.module.min.js"}}</script>
 </head>
 <body>
 <div id="app">
@@ -302,6 +302,23 @@ input[type=range]{width:130px;accent-color:var(--c)}
   <div id="v3SocialResult" class="msg" aria-live="polite">No action yet. No chat sent.</div>
 
   
+  <h3>Maya V8 — Smart brain &amp; phone control</h3>
+  <p class="note">Maya can now keep notes and a to-do list, check live weather, do exact math, tell the time anywhere, give a daily briefing, and remember earlier conversations (saved only on this phone). In the Android app she can call a contact by name (she always asks first), open Wi-Fi / Bluetooth / internet panels, switch do-not-disturb, ringer mode and exact volume, and read device info. Background voice: say "Hey Maya" even with the screen off and she opens and listens.</p>
+  <div class="row"><div>Home city<small>Used for weather and the daily briefing.</small></div><input id="v8HomeCity" class="inp" maxlength="80" placeholder="e.g. Dubai" style="max-width:160px"></div>
+  <div class="krow"><button class="btn" id="v8Weather">Test weather</button><button class="btn" id="v8Info">Device info</button></div>
+  <div class="krow"><button class="btn" id="v8Wifi">Wi-Fi</button><button class="btn" id="v8Bt">Bluetooth</button><button class="btn" id="v8DndOn">DND on</button><button class="btn" id="v8DndOff">DND off</button></div>
+  <div class="krow"><button class="btn" id="v8Vibrate">Vibrate</button><button class="btn" id="v8Normal">Ring</button></div>
+  <div class="krow"><input id="v8CallName" class="inp" style="flex:2;min-width:140px" maxlength="70" placeholder="Contact name to call"><button class="btn" id="v8CallBtn">Find &amp; call</button></div>
+  <p class="msg" id="v8Out" aria-live="polite" style="white-space:pre-wrap">Ready.</p>
+  <h3>Notes &amp; to-do</h3>
+  <div class="krow"><input id="v8TodoText" class="inp" style="flex:2;min-width:140px" maxlength="300" placeholder="Add a to-do"><button class="btn pri" id="v8AddTodo">Add</button><button class="btn" id="v8ClearDone">Clear done</button></div>
+  <div id="v8Notes" class="msg"></div>
+  <h3>Conversation history</h3>
+  <div class="row"><div>Save conversations on this phone<small>Lets Maya recall earlier chats. Never uploaded anywhere by the app.</small></div><input type="checkbox" class="sw" id="v8HistoryOn"></div>
+  <div id="v8History" class="msg"></div>
+  <div class="krow"><button class="btn" id="v8ClearHistory">Delete all history</button></div>
+  <div id="v8Panel"></div>
+
   <h3>Maya V4 — Background voice & screen controls (Android test)</h3>
   <p class="note">Start here while Maya is on screen. Then switch to YouTube or another app. Say "Maya go home", "Maya scroll down", "Maya go back", "Maya tap [visible text]", or "Maya lock screen". Background commands use Android speech recognition, not Gemini Live. Stop anytime from the persistent notification. Accessibility permission must be enabled manually. Some apps restrict screen control.</p>
   <div class="krow"><button class="btn" id="v4Access">Enable Accessibility</button><button class="btn" id="v4Status">Check controls</button></div>
@@ -313,11 +330,12 @@ input[type=range]{width:130px;accent-color:var(--c)}
   <p class="msg" id="v4Result" aria-live="polite">Not tested on this device.</p>
 
   <h3>Maya V5 — 3D Model &amp; Smart Phone (test features)</h3>
-  <p class="note">The familiar 2D Maya remains the default. Load your saved rigged 3D Maya from the earlier backup (maya.vrm), or import your own .glb/.vrm. The included model has 57 face morph targets but no animation clips. Three.js needs internet. Mouth opening is audio-amplitude based, NOT perfect phoneme lip sync.</p>
+  <p class="note">The familiar 2D Maya remains the default. Load the saved rigged 3D Maya (maya.vrm) or import your own .glb/.vrm. VRM models get a natural pose, breathing, random blinking, eye contact, emotion faces, vowel lip sync from her real voice, and hair physics. The 3D engine is bundled, so it works offline, and your choice is remembered.</p>
   <div class="krow"><button class="btn pri" id="v6BundledModel">Load saved 3D Maya</button><button class="btn" id="v5Import3d">Choose GLB / VRM model</button><button class="btn" id="v5Original">Use original 2D Maya</button></div>
   <input type="file" id="v5File3d" accept=".glb,.vrm,model/gltf-binary" hidden>
-  <div class="row"><div>Imported 3D animation<small>Walking requires a walking animation in your uploaded model. Lip motion approximates audio amplitude; visemes are not guaranteed.</small></div>
-    <select id="v5Anim"><option value="idle">Idle</option><option value="walk">Walk (if available)</option></select></div>
+  <div class="row"><div>Imported 3D animation<small>Walking requires a walking animation in your uploaded model. Built-in procedural motion; imported GLB clips play automatically.</small></div>
+    <select id="v5Anim"><option value="idle">Idle</option><option value="walk">Walk in place</option><option value="dance">Dance</option></select></div>
+  <div class="row"><div>3D camera framing<small>Portrait shows face and upper body, like a video call.</small></div><select id="v8Frame"><option value="portrait">Portrait (upper body)</option><option value="face">Close-up face</option><option value="full">Full body</option></select></div>
   <div class="row"><div>3D outfit tint (optional)</div><select id="v5Tint"><option value="original">Original textures</option><option value="#ffb4d8">Pink tint</option><option value="#99dbff">Blue tint</option><option value="#ded0ff">Violet tint</option></select></div>
   <p class="msg" id="v5ModelStatus">Original 2D Maya is active. Your earlier character remains unchanged.</p>
   <div class="krow"><button id="v6RigInspect" class="btn">Inspect 3D face rig</button><button id="v6TestMouth" class="btn">Preview mouth motion</button></div>
@@ -2044,136 +2062,298 @@ if (S.wake) setTimeout(() => Wake.sync(), 600);
 </script>
 
 <script type="module">
-// Maya V5 optional imported 3D viewer. Original 2D character always available.
+// Maya V8 3D engine: real VRM runtime (three-vrm), natural pose, breathing, blinking, gaze,
+// emotion expressions, spectrum-based viseme lip sync, spring-bone hair, remembered model.
+// Libraries are bundled in ./vendor so 3D works offline inside the APK. 2D Maya stays the fallback.
 const $5=id=>document.getElementById(id);
-let three=null,viewer=null,scene=null,camera=null,mixer=null,model=null,clock=null,clips=[],raf=0,morphs=[],hairBones=[],walkBones=[],headBone=null,loadedURL=null;
-let activeClip=null,mouthLag=0,previewMouthUntil=0;
+const say=t=>{if($5('v5ModelStatus'))$5('v5ModelStatus').textContent=t;};
+const PREF='maya.v8.3d';
+let THREE=null,GLTFLoaderC=null,VRMlib=null,viewer=null,renderer=null,scene=null,camera=null,model=null,vrm=null,mixer=null,clips=[],clock=null,raf=0;
+let morphs=[],loadedURL=null,activeClip=null,previewMouthUntil=0,lookTarget=null,rimLight=null,bones={},rest={};
+const cur={aa:0,ih:0,ou:0,ee:0,oh:0,blink:0,happy:0,sad:0,angry:0,relaxed:0,surprised:0};
+let blinkNext=1.5,blinkT=-1,saccade={x:0,y:0,next:0},tick=0,fbin=null,waveUntil=0,lastEmo='neutral',frameMode='portrait';
+// ---- small IndexedDB store so an imported model survives app restarts
+const idb=(mode,fn)=>new Promise((res,rej)=>{const r=indexedDB.open('maya3d',1);r.onupgradeneeded=()=>r.result.createObjectStore('m');r.onerror=()=>rej(r.error);r.onsuccess=()=>{const tx=r.result.transaction('m',mode);const q=fn(tx.objectStore('m'));tx.oncomplete=()=>res(q&&q.result);tx.onerror=()=>rej(tx.error);};});
+const saveCustom=f=>idb('readwrite',s=>s.put(f,'custom')).catch(()=>{});
+const loadCustom=()=>idb('readonly',s=>s.get('custom')).catch(()=>null);
+// ---- hooks into the 2D brain: emotion + fallback speech level
+(function hook(){
+  if(typeof Puppet==='undefined'){setTimeout(hook,300);return;}
+  if(Puppet.__v8)return;Puppet.__v8=1;
+  const se=Puppet.setEmotion.bind(Puppet),sl=Puppet.setLevel.bind(Puppet);
+  Puppet.setEmotion=(e,ms)=>{window.__mayaEmo={e,until:ms?performance.now()+ms:Infinity};if(e==='wave')waveUntil=performance.now()+2600;return se(e,ms);};
+  Puppet.setLevel=(l,f)=>{window.__mayaLvl={l:+l||0,f:!!f,t:performance.now()};return sl(l,f);};
+})();
+function stateNow(){return (typeof app!=='undefined'&&app.state)||'idle';}
+function themeColor(){const c=getComputedStyle(document.documentElement).getPropertyValue('--c').trim();try{return new THREE.Color(c||'#35e4ff');}catch(e){return new THREE.Color('#35e4ff');}}
 function inspectRig(){
- const out=$5('v6RigStatus');if(!out)return;
- if(!model){out.textContent='No 3D model active. Tap Load saved 3D Maya or Choose GLB / VRM above.';return;}
- const names=[...new Set(morphs.flatMap(m=>Object.keys(m.morphTargetDictionary||{})))];
- const mouth=names.filter(x=>/mouth|jaw|viseme|fcl_mth_[aiueo]|(^|[_-])a($|[_-])|^aa$/i.test(x));
- const eyes=names.filter(x=>/blink|eye[_-]?close/i.test(x));
- out.textContent='Actual imported rig: '+morphs.length+' mesh(es) with morphs; '+names.length+' distinct target names. Mouth/lip targets: '+mouth.length+' ['+mouth.slice(0,8).join(', ')+']; blink targets: '+eyes.length+' ['+eyes.slice(0,5).join(', ')+']; clips: '+clips.length+'. Missing targets cannot be animated. This is NOT phoneme-accurate lip sync.';
+  const out=$5('v6RigStatus');if(!out)return;
+  if(!model){out.textContent='No 3D model active. Tap Load saved 3D Maya or Choose GLB / VRM above.';return;}
+  if(vrm){
+    const ex=(vrm.expressionManager?.expressions||[]).map(e=>e.expressionName);
+    const hb=Object.keys(vrm.humanoid?.humanBones||{}).length;
+    out.textContent='VRM '+(vrm.meta?.metaVersion||'')+' rig active. Expressions: '+ex.length+' ['+ex.slice(0,16).join(', ')+']. Humanoid bones: '+hb+'. Spring-bone hair physics: '+(vrm.springBoneManager?'on':'off')+'. Lip sync uses 5 vowel shapes (aa, ih, ou, ee, oh) estimated from the voice spectrum — natural looking, but not phoneme-perfect.';
+    return;
+  }
+  const names=[...new Set(morphs.flatMap(m=>Object.keys(m.morphTargetDictionary||{})))];
+  out.textContent='Generic GLB rig: '+morphs.length+' mesh(es) with morphs, '+names.length+' target names; clips: '+clips.length+'. Mouth uses audio level only.';
 }
 $5('v6RigInspect')?.addEventListener('click',inspectRig);
-$5('v6TestMouth')?.addEventListener('click',()=>{if(!model){inspectRig();return;}previewMouthUntil=performance.now()+1700;inspectRig();});
-const say=t=>{if($5('v5ModelStatus'))$5('v5ModelStatus').textContent=t;};
-function restoreOriginal(){
+$5('v6TestMouth')?.addEventListener('click',()=>{if(!model){inspectRig();return;}previewMouthUntil=performance.now()+2200;window.__mayaEmo={e:'happy',until:performance.now()+2200};inspectRig();});
+function dispose(){
   if(raf)cancelAnimationFrame(raf);raf=0;
-  if(viewer){if(viewer.renderer)viewer.renderer.dispose();viewer.remove();viewer=null;}
+  if(renderer){renderer.dispose();renderer.forceContextLoss?.();renderer=null;}
+  if(viewer){viewer.remove();viewer=null;}
   if(loadedURL){URL.revokeObjectURL(loadedURL);loadedURL=null;}
-  if(three&&model){model.traverse(o=>{if(o.isMesh){o.geometry&&o.geometry.dispose();if(o.material){(Array.isArray(o.material)?o.material:[o.material]).forEach(m=>m.dispose());}}});}
-  model=null;mixer=null;clips=[];morphs=[];hairBones=[];walkBones=[];headBone=null;mouthLag=0;previewMouthUntil=0;
-  $5('maya').style.display=''; say('Original Maya restored. 3D models are not retained after closing the app.');
+  if(THREE&&model){model.traverse(o=>{if(o.isMesh){o.geometry?.dispose();(Array.isArray(o.material)?o.material:[o.material]).forEach(m=>m&&m.dispose());}});}
+  model=null;vrm=null;mixer=null;clips=[];morphs=[];bones={};rest={};activeClip=null;
+  const m=$5('maya');if(m)m.style.display='';
+  document.body.classList.remove('maya3d');
 }
+function restoreOriginal(){dispose();try{localStorage.setItem(PREF,'');}catch(e){}say('Original 2D Maya is active. Tap Load saved 3D Maya any time.');}
 $5('v5Original')?.addEventListener('click',restoreOriginal);
-$5('v5Import3d')?.addEventListener('click',()=> $5('v5File3d')?.click());
-async function loadRiggedFile(file){
-  if(!file)return;
-  if(!/\.(glb|vrm)$/i.test(file.name)){say('Choose a self-contained .glb or .vrm. Separate .gltf asset packages are not supported.');return;}
-  if(file.size>45*1024*1024){say('This model is over 45MB. Try a smaller mobile-optimized file.');return;}
-  restoreOriginal(); say('Loading model renderer (needs internet)…');
-  try {
-    const THREE=await import('three');
-    const {GLTFLoader}=await import('three/addons/loaders/GLTFLoader.js');
-    three=THREE;
-    const frame=document.querySelector('.stage');
-    viewer=document.createElement('div');viewer.id='mayaV5Scene';viewer.style.cssText='width:100%;height:100%;position:absolute;inset:0;pointer-events:none;';frame.appendChild(viewer);
-    const renderer=new THREE.WebGLRenderer({alpha:true,antialias:true,powerPreference:'low-power'});
-    renderer.setPixelRatio(Math.min(devicePixelRatio||1,1.6));renderer.outputColorSpace=THREE.SRGBColorSpace;
-    viewer.appendChild(renderer.domElement);viewer.renderer=renderer;
-    scene=new THREE.Scene(); camera=new THREE.PerspectiveCamera(36,1,0.01,120);
-    scene.add(new THREE.HemisphereLight(0xffffff,0x6780ad,2.2));
-    const key=new THREE.DirectionalLight(0xffffff,2);key.position.set(2,4,5);scene.add(key);
-    loadedURL=URL.createObjectURL(file);
-    const gltf=await new Promise((resolve,reject)=>new GLTFLoader().load(loadedURL,resolve,undefined,reject));
-    model=gltf.scene;scene.add(model);clips=gltf.animations||[];
-    const box=new THREE.Box3().setFromObject(model);const height=box.getSize(new THREE.Vector3()).y;
-    if(!Number.isFinite(height)||height<=0.001)throw Error('Model geometry is empty.');
-    const center=box.getCenter(new THREE.Vector3());
-    const targetHeight=3.2;const ratio=targetHeight/height;model.scale.setScalar(ratio);model.position.copy(center).multiplyScalar(-ratio);
-    camera.position.set(0,0.12,6.7);camera.lookAt(0,0.05,0);
-    mixer=new THREE.AnimationMixer(model);
-    model.traverse(o=>{
-      if(o.isMesh && o.morphTargetDictionary && o.morphTargetInfluences)morphs.push(o);
-      if(o.isBone && /hair|bang|pony|tail/i.test(o.name))hairBones.push({bone:o,base:o.rotation.z});
-      if(o.isBone && /^(?:left|right)(?:UpperLeg|UpperArm|LowerLeg|LowerArm)$/i.test(o.name)){
-        walkBones.push({bone:o,base:o.rotation.x,side:/^left/i.test(o.name)?1:-1,arm:/arm$/i.test(o.name)});
-      }
-      if(o.isBone && /^(head|neck)$/i.test(o.name))headBone={bone:o,base:o.rotation.z};
-      if(o.isMesh && o.material)o.userData.v5materials=(Array.isArray(o.material)?o.material:[o.material]).map(m=>({m,base:m.color?m.color.clone():null}));
-    });
-    clock=new THREE.Clock();$5('maya').style.display='none';
-    function playClip(pref){
-      mixer.stopAllAction();activeClip=null;let candidate=clips.find(c=>new RegExp(pref==='walk'?'walk':'idle|breath','i').test(c.name));
-      if(!candidate && pref==='idle'&&clips.length)candidate=clips[0];
-      if(candidate){activeClip=mixer.clipAction(candidate);activeClip.reset().play();return candidate.name;}
-      return null;
-    }
-    const initial=playClip('idle');
-    const tint=()=>{
-      if(!model)return;
-      const color=$5('v5Tint').value;
-      model.traverse(o=>(o.userData.v5materials||[]).forEach(({m,base})=>{
-        if(base){m.color.copy(base);if(color!=='original')m.color.multiply(new THREE.Color(color));}
-      }));
-    };tint();
-    $5('v5Tint').onchange=tint;
-    $5('v5Anim').onchange=()=>{
-      if(!model)return;
-      const found=playClip($5('v5Anim').value);
-      say(found?'Playing imported animation: '+found:($5('v5Anim').value==='walk'&&walkBones.length?'No imported walk clip: previewing simple rig-bone walking motion (not a real walk animation).':'No matching animation or suitable walking bones in this model.'));
-    };
-    let w0=0,h0=0;const resize=()=>{const w=viewer.clientWidth,h=viewer.clientHeight;if(w&&h&&(w!==w0||h!==h0)){w0=w;h0=h;renderer.setSize(w,h,false);camera.aspect=w/h;camera.updateProjectionMatrix();}};
-    let tick=0;
-    function animate(){
-      if(!model)return;raf=requestAnimationFrame(animate);if(document.hidden)return;
-      const dt=Math.min(clock.getDelta(),.07);tick+=dt;resize();if(mixer)mixer.update(dt);
-      const state=(typeof app!=='undefined'?app.state:'idle');
-      const talking=state==='talking';const level=(talking&&typeof Player!=='undefined'&&Player.level)?Player.level():0;
-      // This is an audio-amplitude approximation, not phoneme-accurate lip sync.
-      const desiredMouth=performance.now()<previewMouthUntil?.7:(talking?Math.min(.9,.09+level*5.5):0);
-      mouthLag+=(desiredMouth-mouthLag)*Math.min(1,dt*17); // smooth amplitude estimate, not visemes
-      const mouth=mouthLag;
-      const blink=(tick%3.8<.13)?1:0;
-      for(const mesh of morphs){
-        for(const [name,index] of Object.entries(mesh.morphTargetDictionary)){
-          let v=null;const n=name.toLowerCase();
-          if(/blink|eye[_-]?close/.test(n))v=blink;
-          else if(/mouthopen|jawopen|fcl_mth_a|(^|[_-])aa($|[_-])|viseme_?a|(^|_)a($|_)/.test(n))v=mouth;
-          else if(/smile|happy|fcl_mth_joy/.test(n))v=talking?.12:.08;
-          if(v!==null)mesh.morphTargetInfluences[index]=v;
-        }
-      }
-      const fakeWalk=!activeClip && $5('v5Anim')?.value==='walk' && walkBones.length>0;
-      if(!activeClip){
-        model.rotation.y=Math.sin(tick*.65)*.045;
-        model.position.y=Math.sin(tick*(fakeWalk?8:1.5))*(fakeWalk?.035:.015);
-      }
-      for(const w of walkBones)w.bone.rotation.x=w.base+(fakeWalk?Math.sin(tick*5.2*w.side)* (w.arm?.18:.30):0);
-      if(headBone)headBone.bone.rotation.z=headBone.base+Math.sin(tick*.8)*.025;
-      for(const h of hairBones)h.bone.rotation.z=h.base+Math.sin(tick*1.4)*.015;
-      renderer.render(scene,camera);
-    }
-    say('Imported 3D model loaded. Morph targets: '+morphs.length+' meshes. Animation clips: '+clips.length+(initial?' (idle: '+initial+')':' (no idle clip)')
-      +'. If your model lacks a face rig, lips/eyes will not animate.');
-    inspectRig();animate();
-  }catch(err){restoreOriginal();say('3D import failed: '+(err.message||err)+'. Original Maya is still available.');}
+$5('v5Import3d')?.addEventListener('click',()=>$5('v5File3d')?.click());
+function frameCamera(){
+  if(!model||!camera)return;
+  model.updateMatrixWorld(true);
+  const W=n=>{const b=vrm?.humanoid?.getRawBoneNode(n);if(!b)return null;const p=new THREE.Vector3();b.getWorldPosition(p);return p;};
+  let headY,footY,topY,midZ=0;
+  const h=W('head'),f=W('leftFoot')||W('rightFoot');
+  if(h&&f){headY=h.y;footY=Math.min(f.y-.06,0);topY=headY+(headY-footY)*.1;midZ=h.z;}
+  else{const box=new THREE.Box3().setFromObject(model);footY=box.min.y;topY=box.max.y;headY=topY-(topY-footY)*.08;midZ=(box.min.z+box.max.z)/2;}
+  const H=topY-footY;const fov=camera.fov*Math.PI/180;
+  let target,extent;
+  if(frameMode==='full'){target=footY+H*.5;extent=H*1.1;}
+  else if(frameMode==='face'){target=headY+H*.01;extent=H*.24;}
+  else{target=headY-H*.15;extent=H*.6;}
+  const aspect=camera.aspect||.7;const need=Math.max(extent,(frameMode==='full'?H*.45:H*.28)/aspect);
+  const dist=(need/2)/Math.tan(fov/2);
+  camera.position.set(0,target+(frameMode==='full'?0:H*.015),midZ+dist);
+  camera.lookAt(0,target,midZ);camera.updateProjectionMatrix();
+  if(lookTarget)lookTarget.position.set(0,headY,camera.position.z);
 }
-$5('v5File3d')?.addEventListener('change',async ev=>{
-  const file=ev.target.files&&ev.target.files[0];ev.target.value='';await loadRiggedFile(file);
-});
-$5('v6BundledModel')?.addEventListener('click',async()=>{
-  const btn=$5('v6BundledModel');btn.disabled=true;say('Checking saved Maya 3D model…');
+async function loadLibs(){
+  if(THREE)return;
+  THREE=await import('three');
+  const g=await import('three/addons/loaders/GLTFLoader.js');
+  const v=await import('@pixiv/three-vrm');
+  GLTFLoaderC=g.GLTFLoader;VRMlib=v;
+}
+function grabBones(){
+  const N=n=>vrm.humanoid.getNormalizedBoneNode(n);
+  rest={};for(const n of ['hips','spine','chest','upperChest','neck','head','leftUpperArm','rightUpperArm','leftLowerArm','rightLowerArm','leftHand','rightHand','leftUpperLeg','rightUpperLeg','leftLowerLeg','rightLowerLeg','leftShoulder','rightShoulder'])bones[n]=N(n)||null;
+  if(bones.hips)rest.hipsY=bones.hips.position.y;
+}
+function setPoseBase(){
+  // Relaxed standing pose instead of the default T-pose (normalized humanoid rig; arms point along ±X).
+  for(const k in bones){const b=bones[k];if(b)b.rotation.set(0,0,0);}
+  const B=bones;
+  if(B.leftUpperArm)B.leftUpperArm.rotation.set(0,0,1.22);
+  if(B.rightUpperArm)B.rightUpperArm.rotation.set(0,0,-1.22);
+  if(B.leftLowerArm)B.leftLowerArm.rotation.set(0,.32,.08);
+  if(B.rightLowerArm)B.rightLowerArm.rotation.set(0,-.32,-.08);
+  if(B.leftHand)B.leftHand.rotation.set(0,0,.12);
+  if(B.rightHand)B.rightHand.rotation.set(0,0,-.12);
+}
+function emotionTargets(){
+  const st=stateNow();const E=window.__mayaEmo;let e=(E&&performance.now()<E.until)?E.e:'neutral';
+  const t={happy:0,sad:0,angry:0,relaxed:.12,surprised:0};
+  if(e==='happy'||e==='wave')t.happy=.75;
+  else if(e==='smile')t.happy=.35;
+  else if(e==='curious')t.surprised=.32;
+  else if(e==='think')t.relaxed=.45;
+  else if(e==='sad')t.sad=.65;
+  else if(e==='angry')t.angry=.4;
+  else if(e==='surprised')t.surprised=.7;
+  else if(st==='listening')t.happy=.18;
+  else t.happy=.1;
+  lastEmo=e;return t;
+}
+function visemes(talking){
+  // Spectrum-based vowel estimate from the actual playing voice; falls back to the speech level.
+  const out={aa:0,ih:0,ou:0,ee:0,oh:0};
+  if(performance.now()<previewMouthUntil){const k=Math.floor(performance.now()/180)%5;const v=['aa','ih','ou','ee','oh'][k];out[v]=.75;return out;}
+  if(!talking)return out;
+  let level=0,low=0,mid=0,high=0;
+  const P=(typeof Player!=='undefined')?Player:null;
+  if(P&&P.an&&P.ctx){
+    level=P.level();
+    if(!fbin||fbin.length!==P.an.frequencyBinCount)fbin=new Uint8Array(P.an.frequencyBinCount);
+    P.an.getByteFrequencyData(fbin);const hz=P.ctx.sampleRate/P.an.fftSize;
+    for(let i=1;i<fbin.length;i++){const f=i*hz,v=fbin[i]/255;if(f<250)continue;if(f<900)low+=v;else if(f<2200)mid+=v;else if(f<5000)high+=v;}
+  }
+  const L=window.__mayaLvl;
+  if(level<.004&&L&&performance.now()-L.t<400){level=L.l*(L.f?.12:1);const k=(Math.sin(tick*13)+1)/2;low=.6+k;mid=.8-k*.4;high=.3+(1-k)*.4;}
+  const open=Math.min(1,Math.max(0,(level-.006)*7.5));
+  if(open<=.02)return out;
+  const sum=low+mid+high+1e-6;const l=low/sum,m=mid/sum,h=high/sum;
+  out.aa=open*Math.max(0,m*1.3+l*.35);
+  out.oh=open*Math.max(0,l*.9-h*.3);
+  out.ou=open*Math.max(0,(l-.45)*1.2);
+  out.ee=open*Math.max(0,(h-.22)*1.6);
+  out.ih=open*Math.max(0,h*.8+m*.2-.25);
+  const tot=out.aa+out.ih+out.ou+out.ee+out.oh;if(tot>1){for(const k in out)out[k]/=tot;}
+  if(tot<open*.5)out.aa+=open*.5-tot;
+  return out;
+}
+function animate(){
+  if(!model)return;raf=requestAnimationFrame(animate);if(document.hidden)return;
+  const dt=Math.min(clock.getDelta(),.066);tick+=dt;resize();
+  const st=stateNow();const talking=st==='talking'||performance.now()<previewMouthUntil;
+  if(mixer)mixer.update(dt);
+  if(vrm){
+    const B=bones;const walk=$5('v5Anim')?.value==='walk',dance=$5('v5Anim')?.value==='dance';
+    setPoseBase();
+    const br=Math.sin(tick*1.6);
+    if(B.spine)B.spine.rotation.x=br*.018;
+    if(B.chest)B.chest.rotation.x=br*.022;
+    if(B.upperChest)B.upperChest.rotation.x=br*.012;
+    if(B.leftShoulder)B.leftShoulder.rotation.z=br*.02;
+    if(B.rightShoulder)B.rightShoulder.rotation.z=-br*.02;
+    if(B.hips){B.hips.rotation.y=Math.sin(tick*.45)*.05;B.hips.rotation.z=Math.sin(tick*.7)*.015;}
+    if(B.leftUpperArm)B.leftUpperArm.rotation.z-=Math.sin(tick*1.6+.4)*.02;
+    if(B.rightUpperArm)B.rightUpperArm.rotation.z+=Math.sin(tick*1.6+.4)*.02;
+    // state body language
+    let headX=0,headZ=0,headY=0;
+    if(st==='thinking'){headZ=.12;headX=-.06;}
+    else if(st==='listening'){headZ=Math.sin(tick*.9)*.05+.05;headX=.03;}
+    else if(talking){const lv=(typeof Player!=='undefined'&&Player.level)?Player.level():0;headX=Math.sin(tick*5.3)*Math.min(.05,lv*.6);headY=Math.sin(tick*1.3)*.04;headZ=Math.sin(tick*.8)*.03;}
+    else{headZ=Math.sin(tick*.6)*.03;headY=Math.sin(tick*.35)*.05;}
+    if(lastEmo==='curious')headZ+=.14;
+    if(lastEmo==='sad')headX+=.12;
+    if(B.neck){B.neck.rotation.x=headX*.5;B.neck.rotation.z=headZ*.5;B.neck.rotation.y=headY*.5;}
+    if(B.head){B.head.rotation.x=headX*.5;B.head.rotation.z=headZ*.5;B.head.rotation.y=headY*.5;}
+    // wave gesture on greetings
+    if(performance.now()<waveUntil&&B.rightUpperArm&&B.rightLowerArm){
+      const left=waveUntil-performance.now();const k=Math.max(0,Math.min(1,left/400,(2600-left)/350));
+      const W=[0,0,-.5,0,0,1.9];
+      B.rightUpperArm.rotation.set(W[0]*k,W[1]*k,-1.22*(1-k)+W[2]*k);
+      B.rightLowerArm.rotation.set(W[3]*k,-.32*(1-k)+W[4]*k,-.08*(1-k)+(W[5]+Math.sin(tick*10)*.35)*k);
+    }
+    if(walk){
+      const s=Math.sin(tick*5.2);
+      if(B.leftUpperLeg)B.leftUpperLeg.rotation.x=s*.42;if(B.rightUpperLeg)B.rightUpperLeg.rotation.x=-s*.42;
+      if(B.leftLowerLeg)B.leftLowerLeg.rotation.x=Math.max(0,-s)*.6;if(B.rightLowerLeg)B.rightLowerLeg.rotation.x=Math.max(0,s)*.6;
+      if(B.leftUpperArm)B.leftUpperArm.rotation.x=-s*.3;if(B.rightUpperArm)B.rightUpperArm.rotation.x=s*.3;
+      if(B.hips)B.hips.position.y=(rest.hipsY||0)+Math.abs(Math.sin(tick*5.2))*.02;
+    }else if(B.hips)B.hips.position.y=rest.hipsY||0;
+    if(dance){
+      const s=Math.sin(tick*4);
+      if(B.hips){B.hips.rotation.z=s*.08;B.hips.rotation.y=Math.sin(tick*2)*.15;}
+      if(B.spine)B.spine.rotation.z=-s*.07;
+      if(B.leftUpperArm)B.leftUpperArm.rotation.z=1.22-Math.max(0,s)*.9;
+      if(B.rightUpperArm)B.rightUpperArm.rotation.z=-1.22+Math.max(0,-s)*.9;
+      if(B.head)B.head.rotation.z=s*.1;
+    }
+    // expressions
+    const em=vrm.expressionManager;
+    if(em){
+      const T=emotionTargets();const V=visemes(talking);
+      const sp=Math.min(1,dt*14),se=Math.min(1,dt*4);
+      for(const k of ['aa','ih','ou','ee','oh']){cur[k]+=(V[k]-cur[k])*sp;em.setValue(k,cur[k]);}
+      const mouthBusy=cur.aa+cur.ih+cur.ou+cur.ee+cur.oh;
+      for(const k in T){const tgt=T[k]*(k==='happy'||k==='surprised'?Math.max(.35,1-mouthBusy*.8):1);cur[k]+=(tgt-cur[k])*se;em.setValue(k,cur[k]);}
+      // natural random blinking (double-blinks sometimes)
+      if(blinkT<0&&tick>blinkNext){blinkT=0;}
+      if(blinkT>=0){blinkT+=dt;const d=.16;const v=blinkT<d/2?blinkT/(d/2):Math.max(0,1-(blinkT-d/2)/(d/2));cur.blink=v;if(blinkT>=d){blinkT=-1;cur.blink=0;blinkNext=tick+(Math.random()<.18?.25:2+Math.random()*3.5);}}
+      em.setValue('blink',cur.happy>.6?Math.min(cur.blink,.4):cur.blink);
+    }
+    // gaze: look at the person with tiny saccades; up-left when thinking
+    if(vrm.lookAt&&lookTarget){
+      if(tick>saccade.next){saccade={x:(Math.random()-.5)*.08,y:(Math.random()-.5)*.05,next:tick+.6+Math.random()*2.2};}
+      const hb=bones.head;let hy=0;if(hb){const p=new THREE.Vector3();hb.getWorldPosition(p);hy=p.y;}
+      const tx=st==='thinking'?-.35:saccade.x,ty=st==='thinking'?.28:saccade.y;
+      lookTarget.position.x+=(tx-lookTarget.position.x)*Math.min(1,dt*8);
+      lookTarget.position.y+=((hy+ty)-lookTarget.position.y)*Math.min(1,dt*8);
+    }
+    vrm.update(dt);
+  }else{
+    // Generic GLB: amplitude mouth + blink only.
+    const lv=talking&&typeof Player!=='undefined'&&Player.level?Player.level():0;
+    const mouth=performance.now()<previewMouthUntil?.7:Math.min(.9,lv*5.5);
+    const blink=(tick%3.8<.13)?1:0;
+    for(const mesh of morphs)for(const [name,i] of Object.entries(mesh.morphTargetDictionary)){const n=name.toLowerCase();if(/blink|eye[_-]?close/.test(n))mesh.morphTargetInfluences[i]=blink;else if(/mouthopen|jawopen|fcl_mth_a|viseme_?aa?$/.test(n))mesh.morphTargetInfluences[i]=mouth;}
+    if(!activeClip)model.rotation.y=Math.sin(tick*.65)*.045;
+  }
+  if(rimLight&&tick%1<dt)rimLight.color.copy(themeColor());
+  renderer.render(scene,camera);
+}
+let w0=0,h0=0;
+function resize(){if(!viewer||!renderer)return;const w=viewer.clientWidth,h=viewer.clientHeight;if(w&&h&&(w!==w0||h!==h0)){w0=w;h0=h;renderer.setSize(w,h,false);camera.aspect=w/h;camera.updateProjectionMatrix();frameCamera();}}
+function tint(){
+  if(!model)return;const color=$5('v5Tint')?.value||'original';
+  model.traverse(o=>(o.userData.v5materials||[]).forEach(({m,base})=>{if(base&&m.color){m.color.copy(base);if(color!=='original')m.color.multiply(new THREE.Color(color));}}));
+}
+async function loadRiggedFile(file,opts){
+  opts=opts||{};
+  if(!file)return false;
+  if(!/\.(glb|vrm)$/i.test(file.name||'')){say('Choose a self-contained .glb or .vrm file.');return false;}
+  if(file.size>60*1024*1024){say('This model is over 60MB. Try a smaller mobile-optimized file.');return false;}
+  dispose();say('Loading 3D Maya…');
   try{
-    const r=await fetch('maya.vrm',{cache:'force-cache'});
-    if(!r.ok)throw Error('maya.vrm not found. Upload the supplied maya.vrm beside index.html in GitHub.');
-    const b=await r.blob();if(b.size>45*1024*1024)throw Error('Model exceeds the 45MB limit.');
-    await loadRiggedFile(new File([b],'maya.vrm',{type:'model/gltf-binary'}));
-  }catch(err){say('Could not load bundled 3D Maya: '+(err.message||err));}
-  finally{btn.disabled=false;}
-});
+    await loadLibs();
+    const frame=document.querySelector('.stage');
+    viewer=document.createElement('div');viewer.id='mayaV5Scene';viewer.style.cssText='width:100%;height:100%;position:absolute;inset:0;pointer-events:none;-webkit-mask-image:linear-gradient(to bottom,#000 78%,transparent 100%);mask-image:linear-gradient(to bottom,#000 78%,transparent 100%);';frame.appendChild(viewer);
+    renderer=new THREE.WebGLRenderer({alpha:true,antialias:true,powerPreference:'default'});
+    renderer.setPixelRatio(Math.min(devicePixelRatio||1,1.75));renderer.outputColorSpace=THREE.SRGBColorSpace;
+    viewer.appendChild(renderer.domElement);renderer.domElement.style.cssText='width:100%;height:100%;display:block';
+    scene=new THREE.Scene();camera=new THREE.PerspectiveCamera(28,(viewer.clientWidth||1)/(viewer.clientHeight||1),0.05,60);
+    const key=new THREE.DirectionalLight(0xffffff,2.1);key.position.set(.8,1.6,2.4);scene.add(key);
+    scene.add(new THREE.HemisphereLight(0xffffff,0x8890a0,.3));
+    rimLight=new THREE.DirectionalLight(themeColor(),.7);rimLight.position.set(-1.2,1.2,-1.6);scene.add(rimLight);
+    loadedURL=URL.createObjectURL(file);
+    const loader=new GLTFLoaderC();loader.register(p=>new VRMlib.VRMLoaderPlugin(p));
+    const gltf=await loader.loadAsync(loadedURL);
+    vrm=gltf.userData.vrm||null;model=vrm?vrm.scene:gltf.scene;clips=gltf.animations||[];
+    if(vrm){
+      const U=VRMlib.VRMUtils;
+      U.rotateVRM0(vrm);
+      model.traverse(o=>{o.frustumCulled=false;});
+      grabBones();setPoseBase();vrm.update(0);
+      lookTarget=new THREE.Object3D();scene.add(lookTarget);
+      if(vrm.lookAt){vrm.lookAt.target=lookTarget;vrm.lookAt.autoUpdate=true;}
+    }else{
+      const box=new THREE.Box3().setFromObject(model);const h=box.getSize(new THREE.Vector3()).y;
+      if(!Number.isFinite(h)||h<=.001)throw Error('Model geometry is empty.');
+      model.scale.setScalar(1.6/h);model.updateMatrixWorld(true);const b2=new THREE.Box3().setFromObject(model);model.position.y-=b2.min.y;model.position.x-=(b2.min.x+b2.max.x)/2;
+      mixer=new THREE.AnimationMixer(model);const idle=clips.find(c=>/idle|breath/i.test(c.name))||clips[0];if(idle){activeClip=mixer.clipAction(idle);activeClip.play();}
+      model.traverse(o=>{if(o.isMesh&&o.morphTargetDictionary&&o.morphTargetInfluences)morphs.push(o);});
+    }
+    scene.add(model);
+    model.traverse(o=>{if(o.isMesh&&o.material)o.userData.v5materials=(Array.isArray(o.material)?o.material:[o.material]).map(m=>({m,base:m.color?m.color.clone():null}));});
+    clock=new THREE.Clock();tick=0;w0=h0=0;resize();frameCamera();
+    const m=$5('maya');if(m)m.style.display='none';document.body.classList.add('maya3d');
+    tint();animate();
+    try{localStorage.setItem(PREF,opts.bundled?'bundled':'custom');}catch(e){}
+    if(!opts.bundled&&!opts.restored)saveCustom(file);
+    say((vrm?'3D Maya is live: breathing, blinking, eye contact, emotions, vowel lip sync and hair physics.':'Imported 3D model loaded (generic GLB: basic blink and mouth).')+' She will load automatically next time.');
+    inspectRig();window.Maya3D={active:true,vrm,_cam:()=>camera,_bones:bones,_scene:()=>scene,frame:f=>{frameMode=f;frameCamera();},debug:()=>{const b=new THREE.Box3().setFromObject(model);const h=new THREE.Vector3();bones.head&&bones.head.getWorldPosition(h);return {cam:camera.position.toArray().map(x=>+x.toFixed(3)),min:b.min.toArray().map(x=>+x.toFixed(3)),max:b.max.toArray().map(x=>+x.toFixed(3)),head:h.toArray().map(x=>+x.toFixed(3)),aspect:camera.aspect};}};
+    return true;
+  }catch(err){console.error(err);dispose();say('3D load failed: '+(err.message||err)+'. Original 2D Maya is still available.');return false;}
+}
+$5('v5File3d')?.addEventListener('change',async ev=>{const f=ev.target.files&&ev.target.files[0];ev.target.value='';await loadRiggedFile(f);});
+async function loadBundled(silent){
+  const btn=$5('v6BundledModel');if(btn)btn.disabled=true;if(!silent)say('Loading saved Maya 3D model…');
+  try{
+    const r=await fetch('maya.vrm');
+    if(!r.ok)throw Error('maya.vrm not found beside index.html.');
+    const b=await r.blob();return await loadRiggedFile(new File([b],'maya.vrm',{type:'model/gltf-binary'}),{bundled:true});
+  }catch(err){say('Could not load bundled 3D Maya: '+(err.message||err));return false;}
+  finally{if(btn)btn.disabled=false;}
+}
+$5('v6BundledModel')?.addEventListener('click',()=>loadBundled(false));
+$5('v5Tint')?.addEventListener('change',tint);
+$5('v5Anim')?.addEventListener('change',()=>{const v=$5('v5Anim').value;say(v==='walk'?'Walking in place.':v==='dance'?'Dancing — have fun.':'Natural idle motion.');});
+$5('v8Frame')?.addEventListener('change',()=>{frameMode=$5('v8Frame').value;try{localStorage.setItem(PREF+'.frame',frameMode);}catch(e){}frameCamera();});
+try{frameMode=localStorage.getItem(PREF+'.frame')||'portrait';if($5('v8Frame'))$5('v8Frame').value=frameMode;}catch(e){}
+// Auto-restore the 3D model chosen last time (after first paint so the app opens fast).
+(async()=>{
+  let p='';try{p=localStorage.getItem(PREF)||'';}catch(e){}
+  if(!p)return;
+  await new Promise(r=>(window.requestIdleCallback||setTimeout)(r,{timeout:1500}));
+  if(p==='bundled')await loadBundled(true);
+  else if(p==='custom'){const f=await loadCustom();if(f)await loadRiggedFile(f,{restored:true});}
+})();
 </script>
 <script>
 /* Maya V5 safe native actions and on-device snapshot. No silent external transfer. */
@@ -2515,6 +2695,285 @@ get('v65Unlock')?.addEventListener('click',()=>{
    if(!confirm('SEND ONE MESSAGE?\nApp: '+v.app+'\nRecipient: '+v.name+'\nMessage: '+v.message+'\n\nOnly confirm if the exact correct chat is on screen.'))return;
    if(!confirm('Final confirmation: tap Android Send in this verified chat? This cannot be undone.'))return;
    show(call('V66_START',{...v,send:true,confirmed:true,cloneConfirmed:clone})); });
+})();
+</script>
+<script>
+/* Maya V8 — smarter brain + more phone control.
+   Adds tools: notes (notes & to-do list), getWeather, calculate, getTime, dailyBriefing,
+   recallConversation, phoneControl (Android). Saves past conversations on this phone only
+   and gives Maya a short recap of the last chat so she remembers context. */
+(() => {
+'use strict';
+const V8 = window.MayaV8 = {};
+const L = { get:(k,d)=>{try{const v=localStorage.getItem('maya.v8.'+k);return v==null?d:JSON.parse(v);}catch(e){return d;}},
+            set:(k,v)=>{try{localStorage.setItem('maya.v8.'+k,JSON.stringify(v));}catch(e){}} };
+const clip=(s,n)=>String(s==null?'':s).replace(/\s+/g,' ').trim().slice(0,n);
+const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,6);
+const native=()=>typeof hasNative==='function'&&hasNative();
+
+/* ---------------- notes & to-dos ---------------- */
+V8.notes={
+  all(){return L.get('notes',[]);},
+  save(a){L.set('notes',a.slice(-300));V8.renderNotes&&V8.renderNotes();},
+  run(a){
+    const op=String(a.op||'list').toLowerCase();let list=this.all();
+    if(op==='add'){const text=clip(a.text,300);if(!text)return{status:'rejected',reason:'text is required.'};
+      const it={id:uid(),kind:a.kind==='todo'?'todo':'note',text,done:false,at:Date.now(),due:clip(a.due,40)||''};list.push(it);this.save(list);
+      try{toast((it.kind==='todo'?'To-do added: ':'Note saved: ')+text,'ok',2200);}catch(e){}
+      return{status:'ok',saved:it};}
+    if(op==='list'){const kind=a.kind==='todo'||a.kind==='note'?a.kind:'';const q=clip(a.text,60).toLowerCase();
+      let r=list.filter(x=>(!kind||x.kind===kind)&&(!q||x.text.toLowerCase().includes(q)));
+      if(a.kind==='todo')r=r.filter(x=>!x.done||a.includeDone);
+      return{status:'ok',count:r.length,items:r.slice(-25).map(x=>({id:x.id,kind:x.kind,text:x.text,done:x.done,due:x.due||undefined,added:new Date(x.at).toLocaleDateString()}))};}
+    const find=()=>{const id=clip(a.id,30);let it=id&&list.find(x=>x.id===id);
+      if(!it&&a.text){const q=clip(a.text,80).toLowerCase();const m=list.filter(x=>x.text.toLowerCase().includes(q));if(m.length===1)it=m[0];else if(m.length>1)return{many:m};}
+      return{it};};
+    if(op==='done'||op==='undone'||op==='remove'){const f=find();
+      if(f.many)return{status:'needs_info',reason:'Several items match; ask which one.',matches:f.many.slice(0,8).map(x=>({id:x.id,text:x.text}))};
+      if(!f.it)return{status:'rejected',reason:'No matching item. List the items first.'};
+      if(op==='remove')list=list.filter(x=>x!==f.it);else f.it.done=op==='done';this.save(list);return{status:'ok',item:f.it.text,op};}
+    if(op==='clear_done'){const n=list.filter(x=>x.done).length;this.save(list.filter(x=>!x.done));return{status:'ok',removed:n};}
+    return{status:'rejected',reason:'op must be add, list, done, undone, remove or clear_done.'};
+  }
+};
+
+/* ---------------- weather & time (Open-Meteo, free, no key) ---------------- */
+const WMO={0:'clear sky',1:'mostly clear',2:'partly cloudy',3:'overcast',45:'fog',48:'freezing fog',51:'light drizzle',53:'drizzle',55:'heavy drizzle',61:'light rain',63:'rain',65:'heavy rain',66:'freezing rain',67:'freezing rain',71:'light snow',73:'snow',75:'heavy snow',77:'snow grains',80:'rain showers',81:'rain showers',82:'violent rain showers',85:'snow showers',86:'snow showers',95:'thunderstorm',96:'thunderstorm with hail',99:'thunderstorm with hail'};
+async function fetchJSON(u,ms){const c=new AbortController();const t=setTimeout(()=>c.abort(),ms||9000);try{const r=await fetch(u,{signal:c.signal});if(!r.ok)throw Error('HTTP '+r.status);return await r.json();}finally{clearTimeout(t);}}
+async function geocode(place){
+  const cache=L.get('geo',{});const k=place.toLowerCase();if(cache[k])return cache[k];
+  const d=await fetchJSON('https://geocoding-api.open-meteo.com/v1/search?count=1&language=en&format=json&name='+encodeURIComponent(place));
+  const g=d&&d.results&&d.results[0];if(!g)return null;
+  const o={name:[g.name,g.admin1,g.country].filter(Boolean).join(', '),lat:g.latitude,lon:g.longitude,tz:g.timezone};cache[k]=o;L.set('geo',cache);return o;
+}
+function gps(){return new Promise(res=>{if(!navigator.geolocation)return res(null);navigator.geolocation.getCurrentPosition(p=>res({name:'your current location',lat:p.coords.latitude,lon:p.coords.longitude}),()=>res(null),{timeout:7000,maximumAge:6e5});});}
+async function resolvePlace(place){
+  place=clip(place,80);
+  if(place)return await geocode(place);
+  const home=clip(L.get('homeCity',''),80);if(home){const g=await geocode(home);if(g)return g;}
+  return await gps();
+}
+V8.weather=async a=>{
+  if(!navigator.onLine)return{status:'error',reason:'Offline.'};
+  try{
+    const g=await resolvePlace(a.place);
+    if(!g)return{status:'needs_info',reason:'I do not know the city. Ask which city, or ask them to set Home city in Settings > Maya V8.'};
+    const u='https://api.open-meteo.com/v1/forecast?latitude='+g.lat+'&longitude='+g.lon+'&current=temperature_2m,apparent_temperature,relative_humidity_2m,weather_code,wind_speed_10m,is_day&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,sunrise,sunset,uv_index_max&timezone=auto&forecast_days=3';
+    const d=await fetchJSON(u);const c=d.current,y=d.daily;
+    const day=i=>({date:y.time[i],condition:WMO[y.weather_code[i]]||'mixed',maxC:Math.round(y.temperature_2m_max[i]),minC:Math.round(y.temperature_2m_min[i]),rainChance:(y.precipitation_probability_max[i]??0)+'%',uvMax:y.uv_index_max?Math.round(y.uv_index_max[i]):undefined});
+    return{status:'ok',place:g.name,now:{tempC:Math.round(c.temperature_2m),feelsLikeC:Math.round(c.apparent_temperature),condition:WMO[c.weather_code]||'mixed',humidity:c.relative_humidity_2m+'%',windKmh:Math.round(c.wind_speed_10m)},today:Object.assign(day(0),{sunrise:(y.sunrise[0]||'').slice(11),sunset:(y.sunset[0]||'').slice(11)}),tomorrow:day(1),dayAfter:day(2),source:'Open-Meteo'};
+  }catch(e){return{status:'error',reason:'Weather service unavailable: '+(e.message||e)};}
+};
+V8.time=async a=>{
+  const place=clip(a.place,80);let tz=clip(a.timezone,60),name='';
+  try{
+    if(!tz&&place){const g=await geocode(place);if(!g)return{status:'rejected',reason:'Unknown place.'};tz=g.tz;name=g.name;}
+    tz=tz||Intl.DateTimeFormat().resolvedOptions().timeZone;
+    const now=new Date();const f=new Intl.DateTimeFormat('en-GB',{timeZone:tz,weekday:'long',year:'numeric',month:'long',day:'numeric',hour:'2-digit',minute:'2-digit',hour12:true});
+    return{status:'ok',place:name||tz,timezone:tz,localTime:f.format(now)};
+  }catch(e){return{status:'error',reason:'Could not read that time zone.'};}
+};
+
+/* ---------------- calculator (safe parser, no eval) ---------------- */
+V8.calc=a=>{
+  const src=String(a.expression||'').toLowerCase().replace(/×/g,'*').replace(/÷/g,'/').replace(/,/g,'').replace(/\s+/g,'').slice(0,200);
+  const src2=src.replace(/(\d+(?:\.\d+)?)([+-])(\d+(?:\.\d+)?)%(?![\d(.])/g,'$1*(1$2$3/100)');
+  if(!src)return{status:'rejected',reason:'expression is required.'};
+  return calcCore(src2,a);};
+function calcCore(src,a){
+  let i=0;const F={sqrt:Math.sqrt,sin:x=>Math.sin(x*Math.PI/180),cos:x=>Math.cos(x*Math.PI/180),tan:x=>Math.tan(x*Math.PI/180),log:Math.log10,ln:Math.log,abs:Math.abs,round:Math.round,floor:Math.floor,ceil:Math.ceil};
+  const C={pi:Math.PI,e:Math.E};
+  const peek=()=>src[i],eat=c=>{if(src[i]===c){i++;return true;}return false;};
+  function expr(){let v=term();for(;;){if(eat('+'))v+=term();else if(eat('-'))v-=term();else return v;}}
+  function term(){let v=factor();for(;;){if(eat('*'))v*=factor();else if(eat('/')){const d=factor();if(d===0)throw Error('division by zero');v/=d;}else if(eat('%')){if(/[\d.(a-z]/.test(peek()||''))v%=factor();else v/=100;}else return v;}}
+  function factor(){let v=unary();if(eat('^'))v=Math.pow(v,factor());return v;}
+  function unary(){if(eat('-'))return -unary();if(eat('+'))return unary();return atom();}
+  function atom(){
+    if(eat('(')){const v=expr();if(!eat(')'))throw Error('missing )');return post(v);}
+    const m=/^[a-z]+/.exec(src.slice(i));if(m){i+=m[0].length;if(F[m[0]]){if(!eat('('))throw Error('use '+m[0]+'(x)');const v=expr();if(!eat(')'))throw Error('missing )');return post(F[m[0]](v));}if(m[0] in C)return post(C[m[0]]);throw Error('unknown word '+m[0]);}
+    const n=/^\d*\.?\d+(e[+-]?\d+)?/.exec(src.slice(i));if(!n)throw Error('bad number at position '+(i+1));i+=n[0].length;return post(parseFloat(n[0]));
+  }
+  function post(v){if(eat('!')){if(v<0||v>170||v%1)throw Error('bad factorial');let r=1;for(let k=2;k<=v;k++)r*=k;return r;}return v;}
+  try{const v=expr();if(i<src.length)throw Error('unexpected "'+src[i]+'"');if(!Number.isFinite(v))throw Error('result is not finite');
+    const r=Math.abs(v)>=1e15||(Math.abs(v)<1e-6&&v!==0)?v.toExponential(6):+v.toFixed(10);return{status:'ok',expression:a.expression,result:r};}
+  catch(e){return{status:'rejected',reason:'Could not calculate: '+e.message+'. Use + - * / ^ % ( ) sqrt() sin() log() etc.'};}
+};
+
+/* ---------------- conversation history (on this phone only) ---------------- */
+V8.history={
+  all(){return L.get('history',[]);},
+  save(tr){
+    if(!L.get('historyOn',true))return;
+    const lines=(tr||[]).filter(x=>x&&x.t).map(x=>({r:x.r==='user'?'u':'m',t:clip(x.t,600)}));if(!lines.length)return;
+    const h=this.all();const last=h[h.length-1];
+    if(last&&Date.now()-last.end<3*60e3){last.lines=last.lines.concat(lines).slice(-120);last.end=Date.now();}
+    else h.push({id:uid(),start:Date.now(),end:Date.now(),lines:lines.slice(-120)});
+    L.set('history',h.slice(-60));V8.renderHistory&&V8.renderHistory();
+  },
+  search(q,limit){
+    const words=clip(q,80).toLowerCase().split(/\s+/).filter(w=>w.length>1);const out=[];
+    for(const s of this.all().slice().reverse()){
+      for(let k=0;k<s.lines.length;k++){const t=s.lines[k].t.toLowerCase();
+        if(!words.length||words.every(w=>t.includes(w))){out.push({when:new Date(s.start).toLocaleString(),who:s.lines[k].r==='u'?'them':'Maya',text:s.lines[k].t,context:s.lines.slice(Math.max(0,k-1),k+2).map(x=>(x.r==='u'?'Them: ':'Maya: ')+x.t).join(' | ')});if(out.length>=(limit||6))return out;}}
+    }
+    return out;
+  },
+  recapText(){
+    const h=this.all();const s=h[h.length-1];if(!s)return '';
+    const ago=Math.round((Date.now()-s.end)/36e5);const when=ago<1?'less than an hour ago':ago<24?ago+' hours ago':Math.round(ago/24)+' days ago';
+    return 'PREVIOUS CONVERSATION ('+when+', for continuity — refer to it naturally only when relevant, never read it out):\n'+s.lines.slice(-8).map(x=>(x.r==='u'?'Them: ':'You: ')+clip(x.t,220)).join('\n');
+  }
+};
+V8.recall=a=>{const r=V8.history.search(a.query,6);return r.length?{status:'ok',matches:r}:{status:'ok',matches:[],note:'Nothing saved matches. Conversation history is kept only on this phone.'};};
+
+/* ---------------- daily briefing ---------------- */
+V8.briefing=async a=>{
+  const out={status:'ok'};
+  out.dateTime=(await V8.time({})).localTime;
+  const w=await V8.weather({place:a.place});out.weather=w.status==='ok'?{place:w.place,now:w.now,today:w.today}:w.reason;
+  const todos=V8.notes.all().filter(x=>x.kind==='todo'&&!x.done);out.openTodos=todos.slice(-8).map(x=>x.text+(x.due?' (due '+x.due+')':''));
+  out.recentNotes=V8.notes.all().filter(x=>x.kind==='note').slice(-3).map(x=>x.text);
+  if(native()){try{const b=JSON.parse(window.MayaBridge.control('V63_BATTERY_STATUS','{}'));if(b.status==='ok')out.battery=b.message;}catch(e){}}
+  if(a.news!==false&&typeof searchWeb==='function'&&navigator.onLine){try{const n=await searchWeb('top 3 news headlines today'+(a.place?' in '+clip(a.place,40):''));if(n&&n.status==='ok')out.news=n.answer||n.text||n.result||n;}catch(e){}}
+  out.howToSpeak='Give a warm, short spoken briefing: greeting, weather in one line, to-dos, then 2-3 headlines. Under 25 seconds. Offer help with the first to-do.';
+  return out;
+};
+
+/* ---------------- Android phone control (native V8 layer) ---------------- */
+const PC_ACTIONS=['CALL_BY_NAME','WIFI','BLUETOOTH','INTERNET','DND_ON','DND_OFF','RINGER','SET_VOLUME','DEVICE_INFO','HOTSPOT','LOCATION','AIRPLANE','NFC','DISPLAY','OPEN_DIALER'];
+let pendingCall=null;
+V8.phone=async a=>{
+  const action=String(a.action||'').toUpperCase();
+  if(!PC_ACTIONS.includes(action))return{status:'rejected',reason:'Unknown action. Allowed: '+PC_ACTIONS.join(', ')};
+  if(!native()||typeof window.MayaBridge.control!=='function')return{status:'rejected',reason:'Phone control needs the Maya Android app (APK).'};
+  const p={};
+  if(action==='CALL_BY_NAME'){
+    const name=clip(a.name,70);if(name.length<2)return{status:'needs_info',reason:'Who should I call? Ask for the contact name.'};
+    if(!a.confirmed){
+      const r=nat('V8_FIND_CONTACT',{name});if(r.status!=='ok')return r;
+      const m=r.matches||[];if(!m.length)return{status:'rejected',reason:'No saved contact matches "'+name+'".'};
+      if(m.length>1&&!a.choice)return{status:'needs_info',reason:'Several contacts match. Ask which one (say the number of the choice) and call again with choice.',matches:m.slice(0,6).map((x,k)=>({choice:k+1,name:x.name,number:x.masked}))};
+      const pick=m[Math.max(0,Math.min(m.length-1,(+a.choice||1)-1))];
+      pendingCall={token:uid(),name:pick.name,number:pick.number,at:Date.now()};
+      try{showPendingCall(pendingCall);}catch(e){}
+      return{status:'needs_confirmation',confirmToken:pendingCall.token,contact:pick.name,number:pick.masked,say:'Ask: "Should I call '+pick.name+' now?" Only after a clear yes, call phoneControl again with confirmed=true and this confirmToken.'};
+    }
+    if(!pendingCall||a.confirmToken!==pendingCall.token||Date.now()-pendingCall.at>90e3)return{status:'expired',reason:'Confirmation expired. Start again without confirmed.'};
+    const c=pendingCall;pendingCall=null;hidePendingCall();
+    return nat('V8_CALL_NUMBER',{number:c.number,name:c.name});
+  }
+  if(action==='RINGER'){const m=String(a.mode||'').toLowerCase();if(!['normal','vibrate','silent'].includes(m))return{status:'needs_info',reason:'mode must be normal, vibrate or silent.'};p.mode=m;}
+  if(action==='SET_VOLUME'){const s=String(a.stream||'media').toLowerCase();if(!['media','ring','alarm','notification','call'].includes(s))return{status:'rejected',reason:'stream must be media, ring, alarm, notification or call.'};const v=Math.round(+a.percent);if(!(v>=0&&v<=100))return{status:'needs_info',reason:'percent 0-100 is required.'};p.stream=s;p.percent=v;}
+  return nat('V8_'+action,p);
+};
+function nat(action,p){
+  let r;try{r=JSON.parse(window.MayaBridge.control(action,JSON.stringify(p||{})));}catch(e){return{status:'error',reason:'Android bridge error: '+(e.message||e)};}
+  if(r.status==='needs_permission'){try{toast(r.message,'',5000);}catch(e){}return{status:'needs_permission',reason:r.message};}
+  if(r.status==='error')return{status:'error',reason:r.message||'Failed.'};
+  const o={status:r.status||'ok',note:r.message};if(r.matches)o.matches=r.matches;if(r.info)o.info=r.info;return o;
+}
+V8.nat=nat;
+function showPendingCall(c){
+  let el=document.getElementById('v8CallCard');
+  if(!el){el=document.createElement('div');el.id='v8CallCard';el.style.cssText='position:fixed;left:12px;right:12px;bottom:calc(120px + env(safe-area-inset-bottom,0px));z-index:60;background:rgba(9,11,24,.97);border:1px solid rgba(var(--rgb),.45);border-radius:16px;padding:12px 14px;display:flex;gap:10px;align-items:center;box-shadow:0 8px 30px rgba(0,0,0,.5)';document.body.appendChild(el);}
+  el.innerHTML='';const t=document.createElement('div');t.style.cssText='flex:1;font-size:14px';t.textContent='Call '+c.name+'?';
+  const yes=document.createElement('button');yes.className='btn pri';yes.textContent='Call';yes.onclick=()=>{const cc=pendingCall;pendingCall=null;hidePendingCall();if(cc)nat('V8_CALL_NUMBER',{number:cc.number,name:cc.name});};
+  const no=document.createElement('button');no.className='btn';no.textContent='Cancel';no.onclick=()=>{pendingCall=null;hidePendingCall();};
+  el.append(t,yes,no);el.hidden=false;clearTimeout(showPendingCall.t);showPendingCall.t=setTimeout(hidePendingCall,90e3);
+}
+function hidePendingCall(){const el=document.getElementById('v8CallCard');if(el)el.hidden=true;}
+
+/* ---------------- wire into Maya's brain ---------------- */
+const STR=(d,x)=>Object.assign({type:'STRING',description:d},x||{});
+const DECLS=()=>[
+  {name:'notes',description:'Personal notes and to-do list saved on this phone. Use for "note this", "add to my to-do", "what are my tasks", "mark X done". Not for long-term personal facts (use saveCustomMemory).',parameters:{type:'OBJECT',properties:{op:STR('Operation.',{enum:['add','list','done','undone','remove','clear_done']}),kind:STR('note or todo.',{enum:['note','todo']}),text:STR('Item text (add) or words to find the item (done/remove/list filter).'),id:STR('Item id from a previous list.'),due:STR('Optional due hint, e.g. "Friday" or "tonight".')},required:['op']}},
+  {name:'getWeather',description:'Live weather now plus today/tomorrow forecast. Leave place empty for the person\'s home city / current location.',parameters:{type:'OBJECT',properties:{place:STR('City name, optional.')}}},
+  {name:'calculate',description:'Exact math. Use for any arithmetic, percentages, tips, unit price, splitting bills. Supports + - * / ^ % ( ) sqrt sin cos tan log ln abs round !.',parameters:{type:'OBJECT',properties:{expression:STR('Math expression, e.g. "15% * 240" or "(1200/3)+50".')},required:['expression']}},
+  {name:'getTime',description:'Current date and time here or in any city / time zone.',parameters:{type:'OBJECT',properties:{place:STR('City, optional.'),timezone:STR('IANA zone like Asia/Dhaka, optional.')}}},
+  {name:'dailyBriefing',description:'Morning/daily briefing: date, weather, open to-dos, battery and top headlines. Use when they ask for a briefing, "what\'s today look like", or after a morning nudge.',parameters:{type:'OBJECT',properties:{place:STR('Optional city.'),news:{type:'BOOLEAN',description:'Include headlines (default true).'}}}},
+  {name:'recallConversation',description:'Search earlier conversations saved on this phone. Use when they ask "what did I tell you about…", "what did we talk about yesterday".',parameters:{type:'OBJECT',properties:{query:STR('Key words to look for.')},required:['query']}},
+];
+const PHONE_DECL=()=>({name:'phoneControl',description:'Extra Android controls. CALL_BY_NAME: call a saved contact by name — first call WITHOUT confirmed to find the contact, ask the person "Should I call X?", then call again with confirmed=true and confirmToken. WIFI / BLUETOOTH / INTERNET / NFC open the Android quick panel to switch them. DND_ON / DND_OFF do-not-disturb. RINGER mode normal/vibrate/silent. SET_VOLUME stream+percent. DEVICE_INFO battery, storage, network, Android version. HOTSPOT / LOCATION / AIRPLANE / DISPLAY open those settings. OPEN_DIALER opens the keypad.',parameters:{type:'OBJECT',properties:{action:STR('Action.',{enum:PC_ACTIONS}),name:STR('Contact name for CALL_BY_NAME.'),choice:{type:'INTEGER',description:'Which match (1-6) when several contacts match.'},confirmed:{type:'BOOLEAN',description:'true only after the person clearly said yes.'},confirmToken:STR('Token from the confirmation step.'),mode:STR('RINGER mode.',{enum:['normal','vibrate','silent']}),stream:STR('SET_VOLUME stream.',{enum:['media','ring','alarm','notification','call']}),percent:{type:'INTEGER',description:'SET_VOLUME 0-100.'}},required:['action']}});
+
+function wire(){
+  if(typeof toolDeclarations!=='function'||typeof runTool!=='function'||typeof buildSystemPrompt!=='function'){setTimeout(wire,200);return;}
+  if(V8.wired)return;V8.wired=true;
+  const td=toolDeclarations,rt=runTool,bsp=buildSystemPrompt,mp=typeof memoryPass==='function'?memoryPass:null;
+  toolDeclarations=function(nativeOn){const t=td(nativeOn);try{const f=t[0].functionDeclarations;f.push(...DECLS());if(nativeOn)f.push(PHONE_DECL());}catch(e){}return t;};
+  runTool=async function(name,args){
+    args=args||{};
+    switch(name){
+      case 'notes':return V8.notes.run(args);
+      case 'getWeather':return await V8.weather(args);
+      case 'calculate':return V8.calc(args);
+      case 'getTime':return await V8.time(args);
+      case 'dailyBriefing':return await V8.briefing(args);
+      case 'recallConversation':return V8.recall(args);
+      case 'phoneControl':return await V8.phone(args);
+    }
+    return rt(name,args);
+  };
+  buildSystemPrompt=function(o){
+    let s=bsp(o);
+    s+='\n\nSMART TOOLS (V8): For any math use calculate — never do arithmetic in your head. For weather use getWeather, for time use getTime. Use notes for to-dos and quick notes ("remind me to buy milk" without a time → a todo; with a time → a reminder action). Use recallConversation when they refer to an earlier chat. Use dailyBriefing for a briefing or "how does my day look". Speak results naturally and briefly; do not read out ids or JSON.';
+    if(o&&o.native)s+=' phoneControl handles calling a contact by name (always confirm first), Wi-Fi/Bluetooth/internet panels, do-not-disturb, ringer mode, exact volume and device info.';
+    const home=L.get('homeCity','');if(home)s+='\nThe person\'s home city: '+clip(home,60)+'.';
+    const todos=V8.notes.all().filter(x=>x.kind==='todo'&&!x.done);if(todos.length)s+='\nOPEN TO-DOS (mention only if relevant): '+todos.slice(-5).map(x=>x.text).join('; ')+'.';
+    if(!(o&&o.recap&&o.recap.length)){const r=V8.history.recapText();if(r)s+='\n\n'+r;}
+    return s;
+  };
+  if(mp)memoryPass=function(tr){try{V8.history.save(tr);}catch(e){}return mp.apply(this,arguments);};
+  // Wake-word launch from the background ("Hey Maya" with the screen off) starts a call automatically.
+  if(typeof sendNudgeNote==='function'){
+    const sn=sendNudgeNote;
+    sendNudgeNote=function(){if(window.__v8Wake){window.__v8Wake=false;try{Live.text('[app note] The person just called you with the wake word "Hey Maya". Answer in one short warm sentence like "Yes, I\'m here" and listen.');}catch(e){}if(typeof pendingNudge!=='undefined')try{pendingNudge='';}catch(e){}return;}
+      if(typeof pendingNudge==='string'&&pendingNudge==='morning'){try{Live.text('[app note] They opened the app from the morning nudge. Greet them warmly and offer a quick daily briefing (dailyBriefing tool) in one short sentence.');}catch(e){}pendingNudge='';return;}
+      return sn.apply(this,arguments);};
+  }
+  // Free the microphone for the call: pause background "Hey Maya" listening while a call is active.
+  if(typeof startCall==='function'&&typeof endCall==='function'){
+    const sc=startCall,ec=endCall;const pause=v=>{if(native()&&typeof window.MayaBridge.control==='function')try{window.MayaBridge.control('V8_VOICE_PAUSE',JSON.stringify({paused:v}));}catch(e){}};
+    startCall=async function(){pause(true);const r=await sc.apply(this,arguments);if(typeof app!=='undefined'&&!app.active)pause(false);return r;};
+    endCall=function(){const r=ec.apply(this,arguments);pause(false);return r;};
+  }
+  setInterval(checkWake,1500);document.addEventListener('visibilitychange',()=>{if(!document.hidden)checkWake();});checkWake();
+}
+function checkWake(){
+  if(!native()||typeof window.MayaBridge.control!=='function')return;
+  let r;try{r=JSON.parse(window.MayaBridge.control('V8_TAKE_WAKE','{}'));}catch(e){return;}
+  if(!r||r.status!=='ok'||!r.wake)return;
+  if(typeof app!=='undefined'&&(app.active||app.starting))return;
+  window.__v8Wake=true;try{showSub('I\'m here…');}catch(e){}
+  if(typeof startCall==='function')startCall();
+}
+wire();
+
+/* ---------------- settings UI ---------------- */
+function ui(){
+  const host=document.getElementById('v8Panel');if(!host)return;
+  const $i=id=>document.getElementById(id);
+  const city=$i('v8HomeCity');city.value=L.get('homeCity','');city.onchange=()=>{L.set('homeCity',clip(city.value,80));toast('Home city saved','ok',1500);};
+  const hon=$i('v8HistoryOn');hon.checked=L.get('historyOn',true);hon.onchange=()=>L.set('historyOn',hon.checked);
+  $i('v8ClearHistory').onclick=()=>{if(confirm('Delete all saved conversations on this phone?')){L.set('history',[]);V8.renderHistory();}};
+  $i('v8ClearDone').onclick=()=>{V8.notes.run({op:'clear_done'});};
+  $i('v8AddTodo').onclick=()=>{const t=$i('v8TodoText');if(t.value.trim()){V8.notes.run({op:'add',kind:'todo',text:t.value});t.value='';}};
+  $i('v8Weather').onclick=async()=>{const o=$i('v8Out');o.textContent='Checking weather…';const w=await V8.weather({});o.textContent=w.status==='ok'?w.place+': '+w.now.tempC+'°C, '+w.now.condition+' (feels '+w.now.feelsLikeC+'°C). Today '+w.today.minC+'–'+w.today.maxC+'°C, rain '+w.today.rainChance+'.':w.reason;};
+  const pc=async(action,extra)=>{const o=$i('v8Out');const r=await V8.phone(Object.assign({action},extra||{}));o.textContent=(r.note||r.reason||r.status)+(r.info?'\n'+Object.entries(r.info).map(([k,v])=>k+': '+v).join('\n'):'');};
+  $i('v8Wifi').onclick=()=>pc('WIFI');$i('v8Bt').onclick=()=>pc('BLUETOOTH');$i('v8DndOn').onclick=()=>pc('DND_ON');$i('v8DndOff').onclick=()=>pc('DND_OFF');$i('v8Info').onclick=()=>pc('DEVICE_INFO');
+  $i('v8Vibrate').onclick=()=>pc('RINGER',{mode:'vibrate'});$i('v8Normal').onclick=()=>pc('RINGER',{mode:'normal'});
+  $i('v8CallBtn').onclick=async()=>{const n=$i('v8CallName').value.trim();const o=$i('v8Out');const r=await V8.phone({action:'CALL_BY_NAME',name:n});o.textContent=r.status==='needs_confirmation'?'Found '+r.contact+' ('+r.number+'). Confirm on the card below.':r.status==='needs_info'&&r.matches?'Several matches: '+r.matches.map(m=>m.choice+'. '+m.name).join(', ')+'. Type the full name.':(r.reason||r.note||r.status);};
+  V8.renderNotes=()=>{const el=$i('v8Notes');if(!el)return;el.innerHTML='';const items=V8.notes.all().slice(-30).reverse();if(!items.length){el.textContent='No notes or to-dos yet. Say "Maya, add buy milk to my to-do list".';return;}
+    for(const it of items){const row=document.createElement('label');row.style.cssText='display:flex;gap:8px;align-items:flex-start;padding:4px 0;font-size:13px';
+      const cb=document.createElement('input');cb.type='checkbox';cb.checked=it.done;cb.disabled=it.kind!=='todo';cb.onchange=()=>V8.notes.run({op:cb.checked?'done':'undone',id:it.id});
+      const tx=document.createElement('span');tx.style.cssText='flex:1;'+(it.done?'text-decoration:line-through;opacity:.6':'');tx.textContent=(it.kind==='todo'?'':'• ')+it.text+(it.due?' — '+it.due:'');
+      const del=document.createElement('button');del.className='btn';del.style.cssText='padding:2px 10px;font-size:12px;flex:0 0 auto;width:auto';del.textContent='Delete';del.onclick=e=>{e.preventDefault();V8.notes.run({op:'remove',id:it.id});};
+      row.append(cb,tx,del);el.appendChild(row);}};
+  V8.renderHistory=()=>{const el=$i('v8History');if(!el)return;el.innerHTML='';const h=V8.history.all().slice().reverse();if(!h.length){el.textContent='No saved conversations yet.';return;}
+    for(const s of h.slice(0,20)){const d=document.createElement('details');d.style.cssText='padding:4px 0;font-size:13px';const sm=document.createElement('summary');sm.textContent=new Date(s.start).toLocaleString()+' · '+s.lines.length+' lines · '+clip((s.lines.find(x=>x.r==='u')||s.lines[0]).t,50);
+      const body=document.createElement('div');body.style.cssText='white-space:pre-wrap;opacity:.85;padding:6px 0 6px 10px;max-height:260px;overflow:auto';body.textContent=s.lines.map(x=>(x.r==='u'?'You: ':'Maya: ')+x.t).join('\n');d.append(sm,body);el.appendChild(d);}};
+  V8.renderNotes();V8.renderHistory();
+}
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',ui);else ui();
 })();
 </script>
 </body>

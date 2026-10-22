@@ -2843,3 +2843,392 @@ s=s.replace(needle,'if (action != null && action.startsWith("V66_")) return Maya
 b.write_text(s)
 print('Maya V6.6 bridge registered.')
 PY_V66_BRIDGE
+
+# ======================================================================
+# Maya V8 — more phone control + screen-off "Hey Maya" wake.
+# Adds MayaV8Tools (call contact by name with confirmation, Wi-Fi /
+# Bluetooth / internet panels, do-not-disturb, ringer mode, exact volume,
+# device info, quick settings shortcuts) and upgrades background voice:
+# "Hey Maya" opens Maya and starts a call, plus torch / battery / time /
+# dial-by-name voice commands. Nothing here bypasses PIN or lock screen.
+# ======================================================================
+cat > "$APP_DIR/MayaV8Tools.java" <<'JAVA_V8'
+package com.tanim.maya;
+
+import android.Manifest;
+import android.app.Activity;
+import android.app.ActivityManager;
+import android.app.Notification;
+import android.app.NotificationChannel;
+import android.app.NotificationManager;
+import android.app.PendingIntent;
+import android.content.Context;
+import android.content.Intent;
+import android.content.IntentFilter;
+import android.content.pm.PackageManager;
+import android.database.Cursor;
+import android.hardware.camera2.CameraCharacteristics;
+import android.hardware.camera2.CameraManager;
+import android.media.AudioManager;
+import android.net.ConnectivityManager;
+import android.net.NetworkCapabilities;
+import android.net.Uri;
+import android.os.BatteryManager;
+import android.os.Build;
+import android.os.Environment;
+import android.os.PowerManager;
+import android.os.StatFs;
+import android.provider.ContactsContract;
+import android.provider.Settings;
+import android.speech.tts.TextToSpeech;
+import org.json.JSONArray;
+import org.json.JSONObject;
+import java.text.Normalizer;
+import java.text.SimpleDateFormat;
+import java.util.ArrayList;
+import java.util.Date;
+import java.util.HashSet;
+import java.util.Locale;
+
+public final class MayaV8Tools {
+    private MayaV8Tools() {}
+    static volatile boolean wakePending = false;
+    static volatile long wakeAt = 0;
+    static volatile boolean voicePaused = false;
+    private static TextToSpeech tts;
+    private static boolean ttsReady = false;
+    private static String ttsQueued = null;
+
+    private static String reply(String status, String msg) {
+        JSONObject o = new JSONObject();
+        try { o.put("status", status); o.put("message", msg); } catch (Exception ignored) {}
+        return o.toString();
+    }
+    private static boolean granted(Context ctx, String p) {
+        return Build.VERSION.SDK_INT < 23 || ctx.checkSelfPermission(p) == PackageManager.PERMISSION_GRANTED;
+    }
+    private static void ask(Activity act, String p, int code) {
+        if (act == null || Build.VERSION.SDK_INT < 23) return;
+        act.runOnUiThread(() -> act.requestPermissions(new String[]{p}, code));
+    }
+    private static boolean open(Context ctx, Intent i) {
+        try { i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK); ctx.startActivity(i); return true; }
+        catch (Exception e) { return false; }
+    }
+    private static String openFirst(Context ctx, String okMsg, Intent... list) {
+        for (Intent i : list) if (i != null && open(ctx, i)) return reply("ok", okMsg);
+        return reply("error", "This phone does not have that settings screen.");
+    }
+
+    public static String run(Context ctx, Activity act, String action, JSONObject a) {
+        if (a == null) a = new JSONObject();
+        try {
+            switch (action) {
+                case "V8_TAKE_WAKE": {
+                    boolean w = wakePending && System.currentTimeMillis() - wakeAt < 60000;
+                    wakePending = false;
+                    JSONObject o = new JSONObject(); o.put("status", "ok"); o.put("wake", w); return o.toString();
+                }
+                case "V8_VOICE_PAUSE": voicePaused = a.optBoolean("paused", true); return reply("ok", voicePaused ? "Background listening paused." : "Background listening resumed.");
+                case "V8_FIND_CONTACT": return findContact(ctx, act, a.optString("name", ""));
+                case "V8_CALL_NUMBER": return callNumber(ctx, act, a.optString("number", ""), a.optString("name", ""));
+                case "V8_WIFI":
+                    return openFirst(ctx, "Opened the Wi-Fi panel. Tap to switch Wi-Fi on or off.",
+                        Build.VERSION.SDK_INT >= 29 ? new Intent(Settings.Panel.ACTION_WIFI) : null, new Intent(Settings.ACTION_WIFI_SETTINGS));
+                case "V8_BLUETOOTH":
+                    return openFirst(ctx, "Opened Bluetooth settings. Tap to switch Bluetooth on or off.", new Intent(Settings.ACTION_BLUETOOTH_SETTINGS));
+                case "V8_INTERNET":
+                    return openFirst(ctx, "Opened the internet panel for Wi-Fi and mobile data.",
+                        Build.VERSION.SDK_INT >= 29 ? new Intent(Settings.Panel.ACTION_INTERNET_CONNECTIVITY) : null, new Intent(Settings.ACTION_WIRELESS_SETTINGS));
+                case "V8_NFC":
+                    return openFirst(ctx, "Opened NFC settings.", Build.VERSION.SDK_INT >= 29 ? new Intent(Settings.Panel.ACTION_NFC) : null, new Intent(Settings.ACTION_NFC_SETTINGS));
+                case "V8_HOTSPOT": {
+                    Intent t = new Intent(); t.setClassName("com.android.settings", "com.android.settings.TetherSettings");
+                    return openFirst(ctx, "Opened hotspot settings.", t, new Intent(Settings.ACTION_WIRELESS_SETTINGS));
+                }
+                case "V8_LOCATION": return openFirst(ctx, "Opened location settings.", new Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS));
+                case "V8_AIRPLANE": return openFirst(ctx, "Opened airplane mode settings.", new Intent(Settings.ACTION_AIRPLANE_MODE_SETTINGS));
+                case "V8_DISPLAY": return openFirst(ctx, "Opened display settings.", new Intent(Settings.ACTION_DISPLAY_SETTINGS));
+                case "V8_OPEN_DIALER": return openFirst(ctx, "Opened the phone keypad.", new Intent(Intent.ACTION_DIAL));
+                case "V8_DND_ON": case "V8_DND_OFF": return dnd(ctx, "V8_DND_ON".equals(action));
+                case "V8_RINGER": return ringer(ctx, a.optString("mode", ""));
+                case "V8_SET_VOLUME": return volume(ctx, a.optString("stream", "media"), a.optInt("percent", -1));
+                case "V8_DEVICE_INFO": return deviceInfo(ctx);
+            }
+        } catch (Exception e) {
+            return reply("error", "Android could not do that: " + e.getClass().getSimpleName());
+        }
+        return reply("error", "Unknown V8 action.");
+    }
+
+    // ---------------- contacts & calling
+    private static String clean(String s) {
+        return Normalizer.normalize(s == null ? "" : s, Normalizer.Form.NFD).replaceAll("\\p{M}", "")
+            .toLowerCase(Locale.ROOT).replaceAll("[^\\p{L}\\p{N} ]", " ").replaceAll("\\s+", " ").trim();
+    }
+    private static String mask(String n) {
+        String d = n.replaceAll("[^0-9+]", "");
+        return d.length() <= 4 ? d : "•••• " + d.substring(d.length() - 4);
+    }
+    static JSONArray matches(Context ctx, String name) throws Exception {
+        String want = clean(name);
+        ArrayList<Object[]> list = new ArrayList<>(); HashSet<String> seen = new HashSet<>();
+        String[] cols = {ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME, ContactsContract.CommonDataKinds.Phone.NUMBER};
+        try (Cursor c = ctx.getContentResolver().query(ContactsContract.CommonDataKinds.Phone.CONTENT_URI, cols, null, null, null)) {
+            if (c != null) while (c.moveToNext()) {
+                String n = c.getString(0), num = c.getString(1);
+                if (n == null || num == null) continue;
+                String cn = clean(n);
+                int score = cn.equals(want) ? 0 : cn.startsWith(want + " ") || cn.startsWith(want) ? 1 : (" " + cn).contains(" " + want) ? 2 : cn.contains(want) ? 3 : 100;
+                if (score == 100) continue;
+                String digits = num.replaceAll("[\\s().-]", "");
+                if (!seen.add(cn + ":" + digits.replaceAll("^\\+?\\d{0,3}(\\d{8,})$", "$1"))) continue;
+                list.add(new Object[]{score, n, digits});
+            }
+        }
+        list.sort((x, y) -> Integer.compare((Integer) x[0], (Integer) y[0]));
+        JSONArray out = new JSONArray();
+        for (int i = 0; i < list.size() && i < 6; i++) {
+            JSONObject o = new JSONObject();
+            o.put("name", list.get(i)[1]); o.put("number", list.get(i)[2]); o.put("masked", mask((String) list.get(i)[2])); o.put("score", list.get(i)[0]);
+            out.put(o);
+        }
+        return out;
+    }
+    private static String findContact(Context ctx, Activity act, String name) throws Exception {
+        if (clean(name).length() < 2) return reply("error", "Say the contact name.");
+        if (!granted(ctx, Manifest.permission.READ_CONTACTS)) {
+            ask(act, Manifest.permission.READ_CONTACTS, 8801);
+            return reply("needs_permission", "Allow Contacts so Maya can find who to call, then ask again.");
+        }
+        JSONArray m = matches(ctx, name);
+        // A single exact match wins even if there are other partial matches.
+        if (m.length() > 1 && m.getJSONObject(0).optInt("score") == 0 && m.getJSONObject(1).optInt("score") > 0) {
+            JSONArray one = new JSONArray(); one.put(m.getJSONObject(0)); m = one;
+        }
+        JSONObject o = new JSONObject(); o.put("status", "ok"); o.put("matches", m);
+        o.put("message", m.length() == 0 ? "No contact found." : m.length() + " match(es).");
+        return o.toString();
+    }
+    private static String callNumber(Context ctx, Activity act, String number, String name) {
+        String n = number.replaceAll("[^0-9+*#]", "");
+        if (n.length() < 3 || n.length() > 20) return reply("error", "That phone number is not valid.");
+        Uri tel = Uri.parse("tel:" + Uri.encode(n));
+        if (granted(ctx, Manifest.permission.CALL_PHONE)) {
+            if (open(ctx, new Intent(Intent.ACTION_CALL, tel))) return reply("ok", "Calling " + (name.isEmpty() ? "the number" : name) + " now.");
+        } else {
+            ask(act, Manifest.permission.CALL_PHONE, 8802);
+        }
+        if (open(ctx, new Intent(Intent.ACTION_DIAL, tel)))
+            return reply("ok", "Opened the dialer with " + (name.isEmpty() ? "the number" : name) + " — tap the green call button. (Allow Phone permission so Maya can call directly next time.)");
+        return reply("error", "No phone app could place the call.");
+    }
+
+    // ---------------- sound & do-not-disturb
+    private static String dnd(Context ctx, boolean on) {
+        if (Build.VERSION.SDK_INT < 23) return reply("error", "Do-not-disturb control needs Android 6 or newer.");
+        NotificationManager nm = (NotificationManager) ctx.getSystemService(Context.NOTIFICATION_SERVICE);
+        if (!nm.isNotificationPolicyAccessGranted()) {
+            open(ctx, new Intent(Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS));
+            return reply("needs_permission", "Allow Maya in \"Do Not Disturb access\", then ask again.");
+        }
+        nm.setInterruptionFilter(on ? NotificationManager.INTERRUPTION_FILTER_PRIORITY : NotificationManager.INTERRUPTION_FILTER_ALL);
+        return reply("ok", on ? "Do not disturb is on." : "Do not disturb is off.");
+    }
+    private static String ringer(Context ctx, String mode) {
+        AudioManager am = (AudioManager) ctx.getSystemService(Context.AUDIO_SERVICE);
+        int m = "silent".equals(mode) ? AudioManager.RINGER_MODE_SILENT : "vibrate".equals(mode) ? AudioManager.RINGER_MODE_VIBRATE : AudioManager.RINGER_MODE_NORMAL;
+        try { am.setRingerMode(m); }
+        catch (SecurityException e) {
+            if (Build.VERSION.SDK_INT >= 23) open(ctx, new Intent(Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS));
+            return reply("needs_permission", "Allow Maya in \"Do Not Disturb access\" to change silent mode, then ask again.");
+        }
+        return reply("ok", "Phone is now on " + (m == AudioManager.RINGER_MODE_SILENT ? "silent" : m == AudioManager.RINGER_MODE_VIBRATE ? "vibrate" : "normal ring") + ".");
+    }
+    private static String volume(Context ctx, String stream, int pct) {
+        if (pct < 0 || pct > 100) return reply("error", "Volume must be 0 to 100 percent.");
+        int s = "ring".equals(stream) ? AudioManager.STREAM_RING : "alarm".equals(stream) ? AudioManager.STREAM_ALARM
+            : "notification".equals(stream) ? AudioManager.STREAM_NOTIFICATION : "call".equals(stream) ? AudioManager.STREAM_VOICE_CALL : AudioManager.STREAM_MUSIC;
+        AudioManager am = (AudioManager) ctx.getSystemService(Context.AUDIO_SERVICE);
+        int max = am.getStreamMaxVolume(s);
+        try { am.setStreamVolume(s, Math.round(max * pct / 100f), AudioManager.FLAG_SHOW_UI); }
+        catch (SecurityException e) { return reply("needs_permission", "Android blocked this while Do Not Disturb is on. Allow Maya Do Not Disturb access first."); }
+        return reply("ok", stream + " volume set to " + pct + " percent.");
+    }
+
+    // ---------------- device info
+    private static String deviceInfo(Context ctx) throws Exception {
+        JSONObject info = new JSONObject();
+        Intent b = ctx.registerReceiver(null, new IntentFilter(Intent.ACTION_BATTERY_CHANGED));
+        if (b != null) {
+            int lvl = b.getIntExtra(BatteryManager.EXTRA_LEVEL, -1), sc = b.getIntExtra(BatteryManager.EXTRA_SCALE, 100);
+            int st = b.getIntExtra(BatteryManager.EXTRA_STATUS, -1), temp = b.getIntExtra(BatteryManager.EXTRA_TEMPERATURE, -1);
+            if (lvl >= 0) info.put("battery", Math.round(lvl * 100f / sc) + "%" + (st == BatteryManager.BATTERY_STATUS_CHARGING || st == BatteryManager.BATTERY_STATUS_FULL ? " (charging)" : ""));
+            if (temp > 0) info.put("batteryTemp", (temp / 10f) + " °C");
+        }
+        StatFs fs = new StatFs(Environment.getDataDirectory().getPath());
+        long free = fs.getAvailableBytes(), total = fs.getTotalBytes();
+        info.put("storage", String.format(Locale.US, "%.1f GB free of %.0f GB", free / 1e9, total / 1e9));
+        ActivityManager am = (ActivityManager) ctx.getSystemService(Context.ACTIVITY_SERVICE);
+        ActivityManager.MemoryInfo mi = new ActivityManager.MemoryInfo(); am.getMemoryInfo(mi);
+        info.put("ram", String.format(Locale.US, "%.1f GB free of %.1f GB", mi.availMem / 1e9, mi.totalMem / 1e9));
+        String net = "offline";
+        try {
+            ConnectivityManager cm = (ConnectivityManager) ctx.getSystemService(Context.CONNECTIVITY_SERVICE);
+            if (Build.VERSION.SDK_INT >= 23 && cm.getActiveNetwork() != null) {
+                NetworkCapabilities nc = cm.getNetworkCapabilities(cm.getActiveNetwork());
+                if (nc != null) net = nc.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) ? "Wi-Fi" : nc.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) ? "mobile data" : nc.hasTransport(NetworkCapabilities.TRANSPORT_VPN) ? "VPN" : "connected";
+            }
+        } catch (Exception ignored) {}
+        info.put("network", net);
+        AudioManager au = (AudioManager) ctx.getSystemService(Context.AUDIO_SERVICE);
+        int rm = au.getRingerMode();
+        info.put("ringer", rm == AudioManager.RINGER_MODE_SILENT ? "silent" : rm == AudioManager.RINGER_MODE_VIBRATE ? "vibrate" : "normal");
+        info.put("mediaVolume", Math.round(au.getStreamVolume(AudioManager.STREAM_MUSIC) * 100f / Math.max(1, au.getStreamMaxVolume(AudioManager.STREAM_MUSIC))) + "%");
+        info.put("phone", Build.MANUFACTURER + " " + Build.MODEL);
+        info.put("android", Build.VERSION.RELEASE + " (API " + Build.VERSION.SDK_INT + ")");
+        JSONObject o = new JSONObject(); o.put("status", "ok"); o.put("info", info);
+        o.put("message", "Battery " + info.optString("battery", "?") + ", " + info.optString("storage") + ", on " + net + ".");
+        return o.toString();
+    }
+
+    // ---------------- background voice ("Hey Maya")
+    static String normalizeWake(String phrase) {
+        if (phrase == null) return null;
+        String s = phrase.trim().toLowerCase(Locale.ROOT).replaceAll("[.,!?।]+", " ").replaceAll("\\s+", " ").trim();
+        s = s.replace("माया", "maya").replace("مایا", "maya").replace("মায়া", "maya").replace("মায়া", "maya").replace("মাইয়া", "maya").replace("মাইয়া", "maya");
+        s = s.replaceFirst("^(hey|hi|hello|ok|okay|oi|হেই|হাই|হ্যালো|ও|हे|हाय|अरे)\\s+(?=maya)", "");
+        return s;
+    }
+    static boolean voice(Context ctx, String words) {
+        String w = words == null ? "" : words.trim();
+        if (w.isEmpty() || w.matches("^(are you there|you there|listen|talk to me|wake up|hello|hi|শোনো|শুনছো|শুনছ|তুমি আছো|সুনো|suno|sun rahi ho|सुनो|बात करो|कहाँ हो)$")) { wake(ctx); return true; }
+        if (w.matches(".*(torch on|flashlight on|light on|টর্চ (জ্বালাও|অন)|লাইট (জ্বালাও|অন)|टॉर्च (जला|ऑन)).*")) { torch(ctx, true); return true; }
+        if (w.matches(".*(torch off|flashlight off|light off|টর্চ (বন্ধ|অফ)|লাইট (বন্ধ|অফ)|टॉर्च (बंद|ऑफ)).*")) { torch(ctx, false); return true; }
+        if (w.matches(".*(battery|ব্যাটারি|चार्ज|बैटरी).*")) {
+            Intent b = ctx.registerReceiver(null, new IntentFilter(Intent.ACTION_BATTERY_CHANGED));
+            int lvl = b == null ? -1 : Math.round(b.getIntExtra(BatteryManager.EXTRA_LEVEL, -1) * 100f / b.getIntExtra(BatteryManager.EXTRA_SCALE, 100));
+            speak(ctx, lvl < 0 ? "I could not read the battery." : "Battery is " + lvl + " percent.");
+            return true;
+        }
+        if (w.matches(".*(what time|the time|time now|কয়টা বাজে|কটা বাজে|টাইম কত|कितने बजे|टाइम क्या).*")) {
+            speak(ctx, "It is " + new SimpleDateFormat("h:mm a", Locale.US).format(new Date()) + ".");
+            return true;
+        }
+        String who = null;
+        java.util.regex.Matcher m = java.util.regex.Pattern.compile("^(?:call|phone|dial)\\s+(.+)$").matcher(w);
+        if (m.find()) who = m.group(1);
+        else {
+            m = java.util.regex.Pattern.compile("^(.+?)\\s*(?:কে|ke|ko|को)\\s*(?:কল|ফোন|call|phone|कॉल|फोन)\\s*(?:কর|করো|দাও|karo|kar|करो|कर)?$").matcher(w);
+            if (m.find()) who = m.group(1);
+        }
+        if (who != null && clean(who).length() >= 2) { dialByName(ctx, who); return true; }
+        return false;
+    }
+    private static void dialByName(Context ctx, String who) {
+        try {
+            if (!granted(ctx, Manifest.permission.READ_CONTACTS)) { speak(ctx, "Please allow contacts in Maya first."); return; }
+            JSONArray mm = matches(ctx, who);
+            if (mm.length() == 0) { speak(ctx, "I could not find " + who + " in your contacts."); return; }
+            JSONObject c = mm.getJSONObject(0);
+            if (mm.length() > 1 && c.optInt("score") > 0) { speak(ctx, "I found several contacts named " + who + ". Open Maya and tell me which one."); return; }
+            // From the background Maya only pre-fills the dialer; you press call. This avoids calling a misheard name.
+            open(ctx, new Intent(Intent.ACTION_DIAL, Uri.parse("tel:" + Uri.encode(c.getString("number")))));
+            speak(ctx, "Opening the dialer for " + c.getString("name") + ". Tap call.");
+        } catch (Exception e) { speak(ctx, "I could not read your contacts."); }
+    }
+    private static void torch(Context ctx, boolean on) {
+        try {
+            if (Build.VERSION.SDK_INT < 23) return;
+            CameraManager cm = (CameraManager) ctx.getSystemService(Context.CAMERA_SERVICE);
+            for (String id : cm.getCameraIdList()) {
+                Boolean f = cm.getCameraCharacteristics(id).get(CameraCharacteristics.FLASH_INFO_AVAILABLE);
+                if (f != null && f) { cm.setTorchMode(id, on); return; }
+            }
+        } catch (Exception ignored) {}
+    }
+    static void wake(Context ctx) {
+        wakePending = true; wakeAt = System.currentTimeMillis();
+        try {
+            PowerManager pm = (PowerManager) ctx.getSystemService(Context.POWER_SERVICE);
+            @SuppressWarnings("deprecation")
+            PowerManager.WakeLock wl = pm.newWakeLock(PowerManager.SCREEN_BRIGHT_WAKE_LOCK | PowerManager.ACQUIRE_CAUSES_WAKEUP, "maya:wake");
+            wl.acquire(8000);
+        } catch (Exception ignored) {}
+        Intent i = ctx.getPackageManager().getLaunchIntentForPackage(ctx.getPackageName());
+        if (i == null) return;
+        i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_REORDER_TO_FRONT | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+        i.putExtra("maya_v8_wake", true);
+        boolean canPop = Build.VERSION.SDK_INT < 23 || Settings.canDrawOverlays(ctx);
+        if (canPop) { try { ctx.startActivity(i); return; } catch (Exception ignored) {} }
+        // Android blocks background app launches without "Display over other apps": show a tap-to-talk alert instead.
+        try {
+            NotificationManager nm = (NotificationManager) ctx.getSystemService(Context.NOTIFICATION_SERVICE);
+            if (Build.VERSION.SDK_INT >= 26) nm.createNotificationChannel(new NotificationChannel("maya_v8_wake", "Hey Maya", NotificationManager.IMPORTANCE_HIGH));
+            PendingIntent pi = PendingIntent.getActivity(ctx, 88, i, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+            Notification.Builder nb = Build.VERSION.SDK_INT >= 26 ? new Notification.Builder(ctx, "maya_v8_wake") : new Notification.Builder(ctx);
+            nb.setSmallIcon(android.R.drawable.ic_btn_speak_now).setContentTitle("Maya is listening").setContentText("Tap to talk to Maya")
+                .setAutoCancel(true).setContentIntent(pi).setCategory(Notification.CATEGORY_CALL).setPriority(Notification.PRIORITY_MAX).setFullScreenIntent(pi, true);
+            nm.notify(8808, nb.build());
+        } catch (Exception ignored) {}
+    }
+    static void onIntent(Activity act, Intent intent) {
+        try {
+            if (intent == null || !intent.getBooleanExtra("maya_v8_wake", false)) return;
+            intent.removeExtra("maya_v8_wake");
+            wakePending = true; wakeAt = System.currentTimeMillis();
+            if (Build.VERSION.SDK_INT >= 27) { act.setShowWhenLocked(true); act.setTurnScreenOn(true); }
+            else act.getWindow().addFlags(android.view.WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED | android.view.WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON);
+            ((NotificationManager) act.getSystemService(Context.NOTIFICATION_SERVICE)).cancel(8808);
+        } catch (Exception ignored) {}
+    }
+    static void speak(Context ctx, String text) {
+        try {
+            if (tts == null) {
+                ttsQueued = text;
+                tts = new TextToSpeech(ctx.getApplicationContext(), s -> {
+                    ttsReady = s == TextToSpeech.SUCCESS;
+                    if (ttsReady && ttsQueued != null) { tts.speak(ttsQueued, TextToSpeech.QUEUE_FLUSH, null, "maya8"); ttsQueued = null; }
+                });
+                return;
+            }
+            if (ttsReady) tts.speak(text, TextToSpeech.QUEUE_FLUSH, null, "maya8"); else ttsQueued = text;
+        } catch (Exception ignored) {}
+    }
+}
+JAVA_V8
+
+python3 - <<'PY_V8_MERGE'
+from pathlib import Path
+base=Path('android/app/src/main/java/com/tanim/maya')
+b=base/'MayaBridge.java'; s=b.read_text()
+needle='return MayaControls.run(ctx, act, action, a);'
+assert s.count(needle)==1, 'bridge dispatch changed'
+s=s.replace(needle,'if (action != null && action.startsWith("V8_")) return MayaV8Tools.run(ctx, act, action, a);\n            '+needle,1)
+b.write_text(s)
+m=base/'MainActivity.java'; s=m.read_text()
+assert s.count('MayaBridge.setNudge(getIntent());')==1 and s.count('MayaBridge.setNudge(intent);')==1
+s=s.replace('MayaBridge.setNudge(getIntent());','MayaBridge.setNudge(getIntent());\n        MayaV8Tools.onIntent(this, getIntent());',1)
+s=s.replace('MayaBridge.setNudge(intent);','MayaBridge.setNudge(intent);\n        MayaV8Tools.onIntent(this, intent);',1)
+m.write_text(s)
+c=base/'MayaV4Controls.java'; s=c.read_text()
+n1='        if (phrase == null) return;\n        String all = phrase.trim().toLowerCase(Locale.ROOT);'
+assert s.count(n1)==1, 'voiceCommand changed'
+s=s.replace(n1,'        if (phrase == null) return;\n        phrase = MayaV8Tools.normalizeWake(phrase);\n        String all = phrase.trim().toLowerCase(Locale.ROOT);',1)
+n2='        String words = all.substring(wake.length()).trim();\n'
+assert s.count(n2)==1
+s=s.replace(n2,n2+'        if (MayaV8Tools.voice(ctx, words)) return;\n',1)
+c.write_text(s)
+v=base/'MayaV4VoiceService.java'; s=v.read_text()
+n3='        if (stopping || !running) return;\n        destroyRecognizer();\n'
+assert s.count(n3)==1, 'voice service listen() changed'
+s=s.replace(n3,n3+'        if (MayaV8Tools.voicePaused) { handler.removeCallbacks(restart); handler.postDelayed(restart, 1500); return; }\n',1)
+s=s.replace('.setContentText("Microphone active. Say Maya + command. Stop anytime.")','.setContentText("Say \\"Hey Maya\\" to talk, or Maya + a command. Stop anytime.")')
+v.write_text(s)
+man=Path('android/app/src/main/AndroidManifest.xml'); s=man.read_text()
+for p in ('android.permission.CALL_PHONE','android.permission.ACCESS_NOTIFICATION_POLICY','android.permission.WAKE_LOCK','android.permission.USE_FULL_SCREEN_INTENT','android.permission.ACCESS_NETWORK_STATE','android.permission.ACCESS_COARSE_LOCATION'):
+    if f'"{p}"' not in s:
+        s=s.replace('<application',f'<uses-permission android:name="{p}" />\n    <application',1)
+man.write_text(s)
+print('Maya V8 registered: call by name, quick panels, DND, ringer, volume, device info, Hey Maya wake.')
+PY_V8_MERGE

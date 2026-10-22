@@ -25,6 +25,9 @@ jobs:
         run: |
           mkdir -p www
           cp index.html manifest.webmanifest sw.js icon-192.png icon-512.png www/
+          # V8: bundled 3D engine + 3D Maya model so they work offline in the app
+          cp -r vendor www/
+          if [ -f maya.vrm ]; then cp maya.vrm www/; fi
 
       - name: Install Capacitor
         run: npm install

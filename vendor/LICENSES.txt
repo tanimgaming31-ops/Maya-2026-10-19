@@ -1,0 +1,2 @@
+three.js r180 — MIT License — https://github.com/mrdoob/three.js
+@pixiv/three-vrm 3.5.5 — MIT License — https://github.com/pixiv/three-vrm
