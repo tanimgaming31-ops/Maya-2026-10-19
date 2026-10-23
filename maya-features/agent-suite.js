@@ -70,7 +70,7 @@ async function gemini(parts,opts={}){
  const k=key();let last;
  for(const model of models()){
   const ctl=opts.signal;
-  const body={contents:[{role:'user',parts}],generationConfig:{temperature:opts.json?.1:.3,maxOutputTokens:opts.json?1400:2200}};
+  const body={contents:[{role:'user',parts}],generationConfig:{temperature:opts.json ? 0.1 : 0.3,maxOutputTokens:opts.json?1400:2200}};
   if(opts.grounded)body.tools=[{google_search:{}}];
   if(opts.json)body.generationConfig.responseMimeType='application/json';
   try{
