@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 const voice=readFileSync(new URL('../maya-features/life-voice.js',import.meta.url),'utf8');
-const source=voice.replace(/^import \{addRecord,loadData,searchNotes,weekly\} from '\.\/life-suite\.js';/m,"const addRecord=()=>{},loadData=()=>({diary:[]}),searchNotes=()=>[],weekly=()=>({diary:0,flashcards:0,focusMinutes:0,spent:{}});");
+const source=voice.replace(/^import \{addRecord,loadData,searchNotes,weekly\} from '\.\/life-suite\.js';/m,"const addRecord=()=>{},loadData=()=>({diary:[]}),searchNotes=()=>[],weekly=()=>({diary:0,flashcards:0,focusMinutes:0,spent:{}});")
+  .replace(/^import \{parseOpenAppCommand,openNamedApp\} from '\.\/app-launcher\.js';/m,"const parseOpenAppCommand=t=>t==='open Telegram'?{kind:'appLaunch',name:'Telegram'}:null; const openNamedApp=async()=> 'Native launch requested.';");
 const api=await import('data:text/javascript;base64,'+Buffer.from(source.replace(/^import \{parseHubCommand,executeHubCommand\} from '\.\/smart-hub\.js';/m,"const parseHubCommand=t=>t==='show my tasks'?{kind:'hub',action:'todoList'}:null;const executeHubCommand=async()=> 'Task list opened.';")).toString('base64'));
 const ok=[
  ['মায়া, আমার ডায়েরিতে লিখো আজ ভালো আছি','diary'],
@@ -24,7 +25,8 @@ const ok=[
  ['Maya show weekly summary','weekly'],
  ['মায়া আমার ডায়েরি দেখাও','diaryList'],
  ['Maya open life suite','open'],
- ['Maya show my tasks','hub']
+ ['Maya show my tasks','hub'],
+ ['Maya open Telegram','appLaunch']
 ];
 for(const [phrase,kind] of ok)assert.equal(api.parseLifeVoice(phrase)?.kind,kind,phrase);
 assert.equal(api.parseLifeVoice('মায়া, আজ ২০ দিরহাম খরচ করেছি')?.amount,20);

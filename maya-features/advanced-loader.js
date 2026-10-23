@@ -5,6 +5,7 @@ import './screenshot.js';
 import './voice-screenshot.js';
 import './life-suite.js';
 import './smart-hub.js';
+import './app-launcher.js';
 import './life-voice.js';
 function init(){
   const host=document.querySelector('#setSheet .body');

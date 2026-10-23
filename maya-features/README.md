@@ -47,3 +47,11 @@ Maya will not automatically send WhatsApp, Messenger, IMO, or SMS messages. It w
 - Routines never run autonomously in the background; Focus uses the existing foreground Life Suite timer after confirmation. No external message sending, no auto-app control, no weather or news fabrication.
 - Custom routine export/import uses strict validation and replacement confirmation; unencrypted JSON. Original Maya Memories/Memory Packs, Private Vault, Avatar, Voice code and Gemini settings remain separate.
 - GitHub compilation/tests verify code and Android build, **not** real-device voice or native permission functionality.
+
+## Maya Android installed-app name launcher V28
+- Open Maya Settings → **Installed Apps • Open by Name** for an on-device list/search or use the existing **Enable Life Suite voice and typed commands** opt-in toggle.
+- Say **Maya, open WhatsApp** / **মায়া, ইমো খোলো** / **মায়া, ফেসবুক চালু করো**, or type the same into original Maya text chat. Works only after a recognized transcript/typed command while Maya is in use. Native Android returns the requested launch intent; the user's phone decides whether it actually opens.
+- Android MAIN/LAUNCHER visibility via Manifest `<queries>`; no `QUERY_ALL_PACKAGES` permission. Only currently visible launchable entries from `PackageManager.queryIntentActivities`. App names and packages remain locally processed; no upload of app inventory to Gemini. Gemini Live voice audio itself already reaches Google as part of the existing Gemini call.
+- Exact unique names launch directly. Similar/ambiguous labels or cloned apps display choices with package name and require the user to tap the intended app. No arbitrary package IDs are launched: native code checks the pair again against current installed Launcher activities.
+- Android-hidden, disabled, separate work-profile, restricted or non-launchable apps may not be listed. Requires working Maya microphone/speech recognition for voice; text and Settings list can work without it. No guarantee of background/closed-app voice, automatic messaging, or accessibility automation.
+- Build/test checks confirm parser and Android compilation, **not** that each installed app opens on a particular phone. Device checks required.

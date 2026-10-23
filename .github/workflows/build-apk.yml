@@ -52,6 +52,11 @@ jobs:
           test -s maya-features/life-suite.js
           test -s maya-features/life-voice.js
           test -s maya-features/smart-hub.js
+          test -s maya-features/app-launcher.js
+          test -s native-app-launcher/MayaAppCatalog.java
+          test -s scripts/install-app-launcher.py
+          test -s tests/app-launcher.test.mjs
+          test -s tests/app-launcher-native-check.py
           test -s tests/smart-hub.test.mjs
           test -s tests/life-voice.test.mjs
           test -s native-life/MayaShareInbox.java
@@ -88,6 +93,8 @@ jobs:
           node tests/life-suite.test.mjs
           node tests/life-voice.test.mjs
           node tests/smart-hub.test.mjs
+          node tests/app-launcher.test.mjs
+          python3 tests/app-launcher-native-check.py
           python3 tests/life-native-check.py
           node tests/voice-screenshot.test.cjs
           python3 tests/native-screenshot-check.py
@@ -111,10 +118,10 @@ jobs:
           html.write_text(s, encoding='utf-8')
           sw = Path('www/sw.js')
           w = sw.read_text(encoding='utf-8')
-          w = re.sub(r"const V = '[^']+';", "const V = 'maya-v27-smart-hub-20261024';", w, count=1)
+          w = re.sub(r"const V = '[^']+';", "const V = 'maya-v28-app-by-name-20261024';", w, count=1)
           if "'./maya-v18-runtime.js'" not in w:
               if 'const SHELL = [' not in w: raise SystemExit('Unexpected sw.js shell declaration')
-              w = w.replace('const SHELL = [', "const SHELL = ['./maya-v18-runtime.js', './maya-features/feature-registry.js', './maya-features/android-bridge.js', './maya-features/memory-v2.js', './maya-features/productivity.js', './maya-features/daily-briefing.js', './maya-features/advanced-loader.js', './maya-features/offline-commands.js', './maya-features/advanced-panel.html', './maya-features/private-vault.js', './maya-features/screenshot.js', './maya-features/voice-screenshot.js', './maya-features/life-suite.js', './maya-features/life-voice.js', './maya-features/smart-hub.js', ",1)
+              w = w.replace('const SHELL = [', "const SHELL = ['./maya-v18-runtime.js', './maya-features/feature-registry.js', './maya-features/android-bridge.js', './maya-features/memory-v2.js', './maya-features/productivity.js', './maya-features/daily-briefing.js', './maya-features/advanced-loader.js', './maya-features/offline-commands.js', './maya-features/advanced-panel.html', './maya-features/private-vault.js', './maya-features/screenshot.js', './maya-features/voice-screenshot.js', './maya-features/life-suite.js', './maya-features/life-voice.js', './maya-features/smart-hub.js', './maya-features/app-launcher.js', ",1)
           sw.write_text(w, encoding='utf-8')
           print('Maya V18 integrated in www/ without editing original repository index.html or setup-native.sh')
           PY_V18
@@ -151,6 +158,10 @@ jobs:
           python3 scripts/ensure-launcher-query.py
           python3 scripts/install-screenshot.py
           python3 scripts/install-life-native.py
+          python3 scripts/install-app-launcher.py
+          grep -Fq 'public String listLaunchableApps()' android/app/src/main/java/com/tanim/maya/MayaBridge.java
+          grep -Fq 'public String launchListedApp(' android/app/src/main/java/com/tanim/maya/MayaBridge.java
+          test -s android/app/src/main/java/com/tanim/maya/MayaAppCatalog.java
           grep -Fq 'public String takeSharedText()' android/app/src/main/java/com/tanim/maya/MayaBridge.java
           grep -Fq 'MayaHomeWidget' android/app/src/main/AndroidManifest.xml
           grep -Fq 'MayaQuickTile' android/app/src/main/AndroidManifest.xml
@@ -183,4 +194,4 @@ jobs:
           cp android/app/build/outputs/apk/debug/app-debug.apk Maya.apk
           gh release create "v${{ github.run_number }}" Maya.apk \
             --title "Maya v${{ github.run_number }}" \
-            --notes "Maya Smart Hub V27: shared To-do voice commands, local categorized-memory search, one-tap morning/focus/evening routines, local privacy overview and tap-to-test Android microphone/camera diagnostics. Confirmed local writes, no background autonomy. Old Maya intact; phone hardware requires testing."
+            --notes "Maya V28: voice/text launch by installed app name using Android MAIN/LAUNCHER only; on-device labels, ambiguity selection, no broad package visibility permission. Previous 3D, Gemini Voice, Memory, Smart Hub, Vault and V27 features preserved. Actual Android device test still needed."
