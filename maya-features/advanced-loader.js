@@ -7,6 +7,7 @@ import './life-suite.js';
 import './smart-hub.js';
 import './app-launcher.js';
 import './life-voice.js';
+import './agent-suite.js';
 function init(){
   const host=document.querySelector('#setSheet .body');
   if(!host||document.getElementById('mayaAdvancedLink'))return;
