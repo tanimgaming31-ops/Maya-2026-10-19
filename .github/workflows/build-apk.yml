@@ -14,6 +14,9 @@ on:
       - 'vendor/**'
       - 'maya.vrm'
       - 'package.json'
+      - 'tests/**'
+      - 'native-screenshot/**'
+      - 'scripts/**'
 
 permissions:
   contents: write
