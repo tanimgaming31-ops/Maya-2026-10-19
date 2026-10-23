@@ -164,6 +164,13 @@ function panel(){
  <pre class="msg" id="agentOutput" style="white-space:pre-wrap;overflow-wrap:anywhere;max-height:350px;overflow-y:auto"></pre>
  <div id="agentLinks"></div>`;
  host.append(root);
+ const tools=document.querySelector('header.top .tools');
+ if(tools&&!$('btnAgentSuite')){
+  const shortcut=document.createElement('button');shortcut.id='btnAgentSuite';shortcut.className='ico';
+  shortcut.textContent='⚡';shortcut.title='Maya Agent Suite';shortcut.setAttribute('aria-label','Open Maya Agent Suite');
+  shortcut.onclick=()=>{const settings=$('btnSet');if(settings)settings.click();root.open=true;root.scrollIntoView({behavior:'smooth',block:'start'});};
+  tools.insertBefore(shortcut,$('btnSet'));
+ }
  $('agentCancel').onclick=()=>stopper?.abort();
  $('agentPlan').onclick=()=>void work('AI Agent Plan',async signal=>{
   const goal=clean($('agentGoal').value,500);if(goal.length<8)throw Error('Enter a detailed goal (8 characters or more).');
@@ -195,7 +202,7 @@ function panel(){
  $('agentAppOpen').onclick=()=>void work('Phone App Launcher',async()=>{
   const name=clean($('agentApp').value,100);if(!name)throw Error('Enter an installed app name.');
   const response=await openNamedApp(name);output(response);
-  if(/^(App not opened|No visible installed|App Launcher requires|Android app list is unavailable|Multiple app matches)/.test(response))throw Error(response);
+  if(!response.startsWith('Android launch requested:'))throw Error(response);
  });
  $('agentFile').onchange=e=>{selectedFile=e.target.files?.[0]||null;show(selectedFile?'Selected: '+clean(selectedFile.name,90)+' ('+selectedFile.size+' bytes)':'No file selected.');};
  $('agentAnalyze').onclick=()=>void work('File Agent',async signal=>{
