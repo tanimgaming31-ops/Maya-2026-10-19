@@ -14,7 +14,7 @@ export function parseLifeVoice(raw){
  if(/^(?:সপ্তাহের হিসাব বলো|সাপ্তাহিক সারাংশ বলো|এই সপ্তাহের হিসাব বলো|show weekly summary|weekly summary)$/iu.test(t))return {kind:'weekly'};
  if(/^(?:ফোকাস\s+(?:বন্ধ করো|বন্ধ|থামাও)|stop focus|cancel focus|stop focus timer)$/iu.test(t))return {kind:'stop'};
  if(/^(?:লাইফ সুইট খোলো|লাইফ স্যুট খোলো|open life suite|show life suite)$/iu.test(t))return {kind:'open'};
- let m=t.match(/^(?:আমার\s+)?ডা[য়য়]েরি(?:তে)?\s+(?:লিখো|লেখো|লিখে রাখো)\s*[:\-]?\s+(.+)$/u)||t.match(/^(?:write|save|add|record)\s+(?:to\s+)?(?:my\s+)?diary\s*[:\-]?\s+(.+)$/iu);
+ let m=t.match(/^(?:আমার\s+)?ডা(?:য়|য়)েরি(?:তে)?\s+(?:লিখো|লেখো|লিখে রাখো)\s*[:\-]?\s+(.+)$/u)||t.match(/^(?:write|save|add|record)\s+(?:to\s+)?(?:my\s+)?diary\s*[:\-]?\s+(.+)$/iu);
  if(m)return {kind:'diary',body:short(m[1],800)};
  m=t.match(/^(?:আজ(?:কে)?\s+)?(\d{1,9}(?:\.\d{1,2})?)\s*(দিরহাম|টাকা|ডলার|রুপি|ইউরো|aed|bdt|usd|inr|eur)\s+খরচ\s*(?:করেছি|করলাম|হয়েছে|হয়েছে)(?:\s+(?:জন্য|কারণে|for)\s+(.+))?$/iu)||t.match(/^(?:log|record|save|add)\s+(?:an?\s+)?expense\s+(?:of\s+)?(\d{1,9}(?:\.\d{1,2})?)\s*(aed|bdt|usd|inr|eur|dirham|taka|dollar|rupee|euro)(?:\s+(?:for|on)\s+(.+))?$/iu);
  if(m){const map={'দিরহাম':'AED','টাকা':'BDT','ডলার':'USD','রুপি':'INR','ইউরো':'EUR',dirham:'AED',taka:'BDT',dollar:'USD',rupee:'INR',euro:'EUR'};const amount=Number(m[1]);if(!(amount>0&&amount<=100000000))return null;return {kind:'expense',amount,currency:map[m[2].toLowerCase()]||m[2].toUpperCase(),note:short(m[3]||'Voice entry',90)};}
@@ -24,7 +24,7 @@ export function parseLifeVoice(raw){
  if(m)return {kind:'note',body:short(m[1],800)};
  m=t.match(/^(?:আমার\s+)?নোট\s*(?:খুঁজে দাও|খোঁজো|সার্চ করো)\s+(.+)$/u)||t.match(/^(?:find|search)\s+(?:my\s+)?notes?\s+(?:for\s+)?(.+)$/iu);
  if(m)return {kind:'search',query:short(m[1],120)};
- if(/^(?:আমার\s+)?ডা[য়য়]েরি\s+দেখাও$/u.test(t)||/^(?:show|list)\s+(?:my\s+)?diary$/iu.test(t))return {kind:'diaryList'};
+ if(/^(?:আমার\s+)?ডা(?:য়|য়)েরি\s+দেখাও$/u.test(t)||/^(?:show|list)\s+(?:my\s+)?diary$/iu.test(t))return {kind:'diaryList'};
  return null;
 }
 const el=id=>typeof document!=='undefined'?document.getElementById(id):null;
