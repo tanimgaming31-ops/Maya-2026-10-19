@@ -58,6 +58,7 @@ jobs:
           test -s maya-features/daily-briefing.js
           test -s maya-features/feature-registry.js
           test -s maya-features/android-bridge.js
+          test -s maya-features/agent-suite.js
           test -s maya-features/advanced-loader.js
           test -s maya-features/life-suite.js
           test -s maya-features/life-voice.js
@@ -103,12 +104,14 @@ jobs:
           node tests/life-suite.test.mjs
           node tests/life-voice.test.mjs
           node tests/smart-hub.test.mjs
+          node tests/agent-suite.test.mjs
           node tests/app-launcher.test.mjs
           python3 tests/app-launcher-native-check.py
           python3 tests/life-native-check.py
           node tests/voice-screenshot.test.cjs
           python3 tests/native-screenshot-check.py
           for js in maya-features/*.js; do node --input-type=module --check < "$js"; done
+          grep -Fq "import './agent-suite.js'" maya-features/advanced-loader.js
           mkdir -p www
           cp index.html manifest.webmanifest sw.js icon-192.png icon-512.png www/
           cp -r vendor www/
@@ -128,15 +131,16 @@ jobs:
           html.write_text(s, encoding='utf-8')
           sw = Path('www/sw.js')
           w = sw.read_text(encoding='utf-8')
-          w = re.sub(r"const V = '[^']+';", "const V = 'maya-v28-app-by-name-20261024';", w, count=1)
+          w = re.sub(r"const V = '[^']+';", "const V = 'maya-v29-agent-suite-20261024';", w, count=1)
           if "'./maya-v18-runtime.js'" not in w:
               if 'const SHELL = [' not in w: raise SystemExit('Unexpected sw.js shell declaration')
-              w = w.replace('const SHELL = [', "const SHELL = ['./maya-v18-runtime.js', './maya-features/feature-registry.js', './maya-features/android-bridge.js', './maya-features/memory-v2.js', './maya-features/productivity.js', './maya-features/daily-briefing.js', './maya-features/advanced-loader.js', './maya-features/offline-commands.js', './maya-features/advanced-panel.html', './maya-features/private-vault.js', './maya-features/screenshot.js', './maya-features/voice-screenshot.js', './maya-features/life-suite.js', './maya-features/life-voice.js', './maya-features/smart-hub.js', './maya-features/app-launcher.js', ",1)
+              w = w.replace('const SHELL = [', "const SHELL = ['./maya-v18-runtime.js', './maya-features/feature-registry.js', './maya-features/android-bridge.js', './maya-features/memory-v2.js', './maya-features/productivity.js', './maya-features/daily-briefing.js', './maya-features/advanced-loader.js', './maya-features/agent-suite.js', './maya-features/offline-commands.js', './maya-features/advanced-panel.html', './maya-features/private-vault.js', './maya-features/screenshot.js', './maya-features/voice-screenshot.js', './maya-features/life-suite.js', './maya-features/life-voice.js', './maya-features/smart-hub.js', './maya-features/app-launcher.js', ",1)
           sw.write_text(w, encoding='utf-8')
           print('Maya V18 integrated in www/ without editing original repository index.html or setup-native.sh')
           PY_V18
           grep -Fq 'maya-v18-runtime.js' www/index.html
           test -s www/maya-features/memory-v2.js
+          test -s www/maya-features/agent-suite.js
           test -s www/maya-features/productivity.js
           test -s www/maya-features/daily-briefing.js
 
@@ -221,4 +225,4 @@ jobs:
           cp android/app/build/outputs/apk/debug/app-debug.apk Maya.apk
           gh release create "v${{ github.run_number }}" Maya.apk \
             --title "Maya v${{ github.run_number }}" \
-            --notes "Maya V28: voice/text launch by installed app name using Android MAIN/LAUNCHER only; on-device labels, ambiguity selection, no broad package visibility permission. Previous 3D, Gemini Voice, Memory, Smart Hub, Vault and V27 features preserved. Actual Android device test still needed."
+            --notes "Maya V29: Eight-feature consent-based Agent Suite in Settings (planning, browser links, Android app launcher, file analysis, grounded research, read-only multi-step tasks, coding review, local dashboard). Requires the user's own Gemini key/quota. Previous 3D, voice, memory and native features preserved. Android device test still needed."
