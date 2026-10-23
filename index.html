@@ -1406,7 +1406,7 @@ const Live = {
 };
 function waitOnline() { return new Promise(res => { if (navigator.onLine) return res(); const h = () => { removeEventListener('online', h); res(); }; addEventListener('online', h); setTimeout(h, 300000); }); }
 
-function flushUser() { const t = app.userBuf.trim(); app.userBuf = ''; if (!t) return; gate.noteUser(t); app.transcript.push({ r:'user', t }); if (app.transcript.length > 80) app.transcript.shift();
+function flushUser() { const t = app.userBuf.trim(); app.userBuf = ''; if (!t) return; if(window.MayaLifeVoice?.consumeLive(t)) { app.transcript.push({ r:'user', t }); if(app.transcript.length>80)app.transcript.shift(); return; } gate.noteUser(t); app.transcript.push({ r:'user', t }); if (app.transcript.length > 80) app.transcript.shift();
   const r = gate.afterUtterance(t); if (r === 'declined' || r === 'topic_changed') hidePending(); }
 function flushAi() { const t = app.aiBuf.trim(); app.aiBuf = ''; app.modelStarted = false; if (t) { app.transcript.push({ r:'maya', t }); if (app.transcript.length > 80) app.transcript.shift(); } }
 function firstModelOutput() { if (!app.modelStarted) { app.modelStarted = true; flushUser(); showYou(''); } if (app.state !== 'talking' && !app.skipAudio) { /* state follows audio */ } }
@@ -1744,6 +1744,13 @@ const FB = {
     try { r.start(); } catch (e) { this.rec = null; setTimeout(() => this.listen(), 600); }
   },
   async handle(text) {
+    if(window.MayaLifeVoice?.recognizes(text)) {
+      this.busy = true; setState('thinking');
+      try { const result = await window.MayaLifeVoice.runLifeVoice(window.MayaLifeVoice.parseLifeVoice(text)); showSub(result); if(this.active)await this.speak(result); }
+      catch(e) { showSub('Life Voice error: '+String(e?.message||e)); }
+      finally { this.busy = false; if(this.active)this.listen(); }
+      return;
+    }
     this.busy = true; setState('thinking'); gate.noteUser(text); app.transcript.push({ r:'user', t:text }); const g = gate.afterUtterance(text); if (g === 'declined' || g === 'topic_changed') hidePending();
     if(isMayaFeatureReportQuestion(text)) {const report=await collectMayaFeatureReport();showMayaFeatureReport(report,true);await this.speak(mayaFeatureReportSummary());this.busy=false;if(this.active)this.listen();return;}
     const direct=mayaDirectPhoneCommand(text);
@@ -1817,6 +1824,7 @@ function endCall(silent) {
 }
 async function sendTyped() {
   const t = $('#txt').value.trim(); if (!t) return; $('#txt').value = '';
+  if(window.MayaLifeVoice?.consumeTyped(t)) { showYou(t); return; }
   if(isMayaFeatureReportQuestion(t)) { showYou(t); const report=await collectMayaFeatureReport(); showMayaFeatureReport(report,true); showSub(mayaFeatureReportSummary());return; }
   const direct=mayaDirectPhoneCommand(t);
   if(direct && hasNative()){

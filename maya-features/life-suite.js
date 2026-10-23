@@ -81,6 +81,7 @@ function mount(){
  $('lifeClear').onclick=()=>{if(confirm('Delete only Life Suite data? Export first if needed.')){localStorage.removeItem(KEY);refresh();say('Life Suite data cleared, original Maya data untouched.');}};
  $('lifePrivacy').onclick=()=>{const d=loadData();$('lifePrivacyOut').textContent=kinds.map(k=>k+': '+d[k].length).join('\n')+'\nShare receiver: '+(typeof window.MayaBridge?.takeSharedText==='function'?'Available':'Not installed')+'\nQR: '+('BarcodeDetector' in window?'Potentially supported':'Unsupported')+'\nLocation: '+(!!navigator.geolocation)+'\nOld Maya keys, memory and Private Vault are separate.';};
  $('lifePermissions').onclick=()=>{try{if(typeof window.MayaBridge?.openAppInfo==='function'){window.MayaBridge.openAppInfo();say('Requested Android Maya settings.');}else say('Open Android Settings → Apps → Maya → Permissions manually.');}catch(e){say(e.message);}};
+ window.addEventListener('maya:life-data-changed',refresh);
  document.addEventListener('visibilitychange',()=>{if(document.hidden)stopQR();});
 }
 if(typeof document!=='undefined'){if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',mount,{once:true});else mount();}

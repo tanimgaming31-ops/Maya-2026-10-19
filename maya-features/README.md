@@ -31,3 +31,10 @@ Maya will not automatically send WhatsApp, Messenger, IMO, or SMS messages. It w
 - No background geofencing, no automatic contact reading, no full file rename/organizer, no device-wide Bluetooth route control, no offline OCR, no guaranteed AI tutor or fully automatic background timers.
 - This suite never changes old Maya memory packs, Gemini keys, voice UI or 3D model. Its own data is stored **unencrypted** in localStorage; the separate Private Vault remains the encrypted option.
 - APK build passing does not verify actual Android device behavior: manually test Share chooser, home widget, quick tile, camera and runtime permissions.
+
+## Maya Unified Life Voice V25
+- Opt-in toggle in existing Settings. Commands MUST begin with `Maya` or `মায়া`; local parser supports specific Bengali/English phrases.
+- Routes final Fallback SpeechRecognition commands before Gemini text calls; routes recognized text chat commands before Gemini key checks; routes final Gemini Live input transcript on flush. **Gemini Live audio has already reached Google** before text is available; the model may still reply. It is not offline/background speech recognition.
+- Local, tested parser: confirmed Diary, Expenses (AED/BDT/USD/INR/EUR), Knowledge Notes; foreground Focus via existing Life Suite timer. Read-only: local note search, latest diary summary, weekly insights, native battery status. Open Life Suite shortcut.
+- Saved data and starting Focus show Confirm/Cancel UI (30-second timeout); opt-in off by default; hidden app cancels pending confirmation. Sensitive-looking passwords/OTP text is refused for diary/notes. Life Suite localStorage remains unencrypted; Private Vault is separate.
+- Test from Settings with a typed command. Fallback voice uses existing device voice and speech synthesis; Gemini Live confirmation may only display on screen. Manual Android/device checks are required. No automatic WhatsApp/IMO/Messenger sending or new dangerous permissions.
