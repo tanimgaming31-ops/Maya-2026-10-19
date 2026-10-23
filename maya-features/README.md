@@ -13,3 +13,11 @@ This folder adds an upgrade foundation to the existing Maya app without replacin
 ## Safety rule
 
 Maya will not automatically send WhatsApp, Messenger, IMO, or SMS messages. It will prepare a draft and require explicit user confirmation.
+
+## Opt-in Private Vault
+- AES-256-GCM encrypted text in separate local storage, 600k PBKDF2 SHA-256 iterations.
+- Create with at least 10 characters, long unique passphrase recommended. No biometric unlock.
+- Auto-lock after 60 seconds without edits, and when Maya enters the background.
+- Export encrypted backup; restore uses the original passphrase to validate ciphertext BEFORE overwriting existing vault, with confirmation.
+- NOT encrypted by this vault: old Maya Memories/Memory Packs, Gemini key, chat and ordinary Notes.
+- Without the passphrase, contents are unrecoverable. Back up before uninstall/clear-data.

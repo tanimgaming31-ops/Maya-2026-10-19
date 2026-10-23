@@ -1,0 +1,24 @@
+/* Maya Private Vault AES-GCM/backup regression; Node 20 */
+import { readFileSync } from 'node:fs';
+import { webcrypto } from 'node:crypto';
+globalThis.crypto ??= webcrypto;
+const raw=readFileSync(new URL('../maya-features/private-vault.js',import.meta.url),'utf8');
+const {verifyVaultBackup}=await import('data:text/javascript;base64,'+Buffer.from(raw).toString('base64'));
+const pass='a long unique test vault passphrase',E=new TextEncoder(),b64=x=>Buffer.from(x).toString('base64');
+const salt=webcrypto.getRandomValues(new Uint8Array(16)),iv=webcrypto.getRandomValues(new Uint8Array(12));
+const material=await webcrypto.subtle.importKey('raw',E.encode(pass),'PBKDF2',false,['deriveKey']);
+const key=await webcrypto.subtle.deriveKey({name:'PBKDF2',salt,iterations:600000,hash:'SHA-256'},material,{name:'AES-GCM',length:256},false,['encrypt','decrypt']);
+const plain='Maya vault private বাংলা ❤️';
+const bytes=new Uint8Array(await webcrypto.subtle.encrypt({name:'AES-GCM',iv,additionalData:E.encode('maya_private_vault_v1')},key,E.encode(plain)));
+const data={v:1,iterations:600000,salt:b64(salt),iv:b64(iv),data:b64(bytes)};
+const ok=(v,why)=>{if(!v)throw Error('Vault test failure: '+why)};
+ok(!JSON.stringify(data).includes(plain),'ciphertext has no plaintext');
+ok((await verifyVaultBackup(JSON.stringify(data),pass)).text===plain,'authenticated decrypt');
+let bad=false;try{await verifyVaultBackup(data,'incorrect secret');}catch{bad=true}ok(bad,'wrong secret');
+bad=false;try{await verifyVaultBackup({...data,iterations:1000},pass);}catch{bad=true}ok(bad,'iterations guard');
+bad=false;try{await verifyVaultBackup({...data,iv:'AAAA'},pass);}catch{bad=true}ok(bad,'nonce guard');
+const modified=Uint8Array.from(bytes);modified[0]^=1;
+bad=false;try{await verifyVaultBackup({...data,data:b64(modified)},pass);}catch{bad=true}ok(bad,'tamper guard');
+const restored=(await verifyVaultBackup(JSON.stringify((await verifyVaultBackup(data,pass)).record),pass)).text;
+ok(restored===plain,'export-import format');
+console.log('Maya Private Vault: 7 crypto/format assertions passed (not an Android UI test).');

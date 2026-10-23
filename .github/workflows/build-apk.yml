@@ -45,6 +45,8 @@ jobs:
           test -s maya-features/feature-registry.js
           test -s maya-features/android-bridge.js
           test -s maya-features/advanced-loader.js
+          test -s maya-features/private-vault.js
+          test -s tests/private-vault.test.mjs
           test -s maya-features/offline-commands.js
           test -s maya-features/advanced-panel.html
           node --input-type=module --check < maya-v18-runtime.js
@@ -57,6 +59,7 @@ jobs:
           Path('/tmp/maya-advanced-panel.mjs').write_text(m.group(1),encoding='utf-8')
           PY_ADVANCED_TEST
           node --input-type=module --check < /tmp/maya-advanced-panel.mjs
+          node tests/private-vault.test.mjs
           for js in maya-features/*.js; do node --input-type=module --check < "$js"; done
           mkdir -p www
           cp index.html manifest.webmanifest sw.js icon-192.png icon-512.png www/
@@ -77,10 +80,10 @@ jobs:
           html.write_text(s, encoding='utf-8')
           sw = Path('www/sw.js')
           w = sw.read_text(encoding='utf-8')
-          w = re.sub(r"const V = '[^']+';", "const V = 'maya-v19-advanced-20261023';", w, count=1)
+          w = re.sub(r"const V = '[^']+';", "const V = 'maya-v21-private-vault-20261023';", w, count=1)
           if "'./maya-v18-runtime.js'" not in w:
               if 'const SHELL = [' not in w: raise SystemExit('Unexpected sw.js shell declaration')
-              w = w.replace('const SHELL = [', "const SHELL = ['./maya-v18-runtime.js', './maya-features/feature-registry.js', './maya-features/android-bridge.js', './maya-features/memory-v2.js', './maya-features/productivity.js', './maya-features/daily-briefing.js', './maya-features/advanced-loader.js', './maya-features/offline-commands.js', './maya-features/advanced-panel.html', ",1)
+              w = w.replace('const SHELL = [', "const SHELL = ['./maya-v18-runtime.js', './maya-features/feature-registry.js', './maya-features/android-bridge.js', './maya-features/memory-v2.js', './maya-features/productivity.js', './maya-features/daily-briefing.js', './maya-features/advanced-loader.js', './maya-features/offline-commands.js', './maya-features/advanced-panel.html', './maya-features/private-vault.js', ",1)
           sw.write_text(w, encoding='utf-8')
           print('Maya V18 integrated in www/ without editing original repository index.html or setup-native.sh')
           PY_V18
@@ -136,4 +139,4 @@ jobs:
           cp android/app/build/outputs/apk/debug/app-debug.apk Maya.apk
           gh release create "v${{ github.run_number }}" Maya.apk \
             --title "Maya v${{ github.run_number }}" \
-            --notes "Maya update. Advanced categorized memory, in-app productivity and daily briefing added without replacing original Maya."
+            --notes "Maya V21: opt-in encrypted Private Vault with authenticated backup export/import, Advanced Panel and Memory V2. Old Maya retained."
