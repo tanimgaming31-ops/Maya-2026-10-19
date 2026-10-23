@@ -1,0 +1,17 @@
+import { readFileSync } from 'node:fs';
+import assert from 'node:assert/strict';
+const src=readFileSync(new URL('../maya-features/life-suite.js',import.meta.url),'utf8');
+const api=await import('data:text/javascript;base64,'+Buffer.from(src).toString('base64'));
+const d={diary:[],expense:[],bookmark:[],knowledge:[{id:'1',title:'Maya diary',body:'Bengali practice'}],flashcard:[],focus:[],place:[]};
+assert.equal(api.validData(d),true);
+assert.equal(api.validData({...d,diary:Array.from({length:501},()=>({id:'a'}))}),false);
+assert.equal(api.searchNotes('bengali',d).length,1);
+assert.equal(api.searchNotes('unknown',d).length,0);
+assert.throws(()=>api.safeUrl('javascript:alert(1)'));
+assert.equal(api.safeUrl('https://example.com/'),'https://example.com/');
+assert.ok(api.meters(25.2048,55.2708,25.2048,55.2708)<1);
+assert.ok(api.meters(25.2048,55.2708,25.2058,55.2708)>100);
+const x={...d,diary:[{id:'d',at:'2026-10-23T10:00:00.000Z'}],expense:[{id:'e',currency:'AED',amount:4,at:'2026-10-23T10:00:00.000Z'}],focus:[{id:'f',minutes:25,at:'2026-10-23T10:00:00.000Z'}]};
+const w=api.weekly(x,new Date('2026-10-23T12:00:00Z'));
+assert.equal(w.diary,1);assert.equal(w.spent.AED,4);assert.equal(w.focusMinutes,25);
+console.log('Maya Life Suite: 11 logic tests passed; device-only features require manual testing.');

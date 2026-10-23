@@ -16,6 +16,7 @@ on:
       - 'package.json'
       - 'tests/**'
       - 'native-screenshot/**'
+      - 'native-life/**'
       - 'scripts/**'
 
 permissions:
@@ -48,6 +49,15 @@ jobs:
           test -s maya-features/feature-registry.js
           test -s maya-features/android-bridge.js
           test -s maya-features/advanced-loader.js
+          test -s maya-features/life-suite.js
+          test -s native-life/MayaShareInbox.java
+          test -s native-life/MayaHomeWidget.java
+          test -s native-life/MayaQuickTile.java
+          test -s native-life/maya_home_widget.xml
+          test -s native-life/maya_widget_info.xml
+          test -s scripts/install-life-native.py
+          test -s tests/life-native-check.py
+          test -s tests/life-suite.test.mjs
           test -s maya-features/private-vault.js
           test -s maya-features/screenshot.js
           test -s maya-features/voice-screenshot.js
@@ -71,6 +81,8 @@ jobs:
           PY_ADVANCED_TEST
           node --input-type=module --check < /tmp/maya-advanced-panel.mjs
           node tests/private-vault.test.mjs
+          node tests/life-suite.test.mjs
+          python3 tests/life-native-check.py
           node tests/voice-screenshot.test.cjs
           python3 tests/native-screenshot-check.py
           for js in maya-features/*.js; do node --input-type=module --check < "$js"; done
@@ -93,10 +105,10 @@ jobs:
           html.write_text(s, encoding='utf-8')
           sw = Path('www/sw.js')
           w = sw.read_text(encoding='utf-8')
-          w = re.sub(r"const V = '[^']+';", "const V = 'maya-v22-screenshot-20261023';", w, count=1)
+          w = re.sub(r"const V = '[^']+';", "const V = 'maya-v24-life-20261023';", w, count=1)
           if "'./maya-v18-runtime.js'" not in w:
               if 'const SHELL = [' not in w: raise SystemExit('Unexpected sw.js shell declaration')
-              w = w.replace('const SHELL = [', "const SHELL = ['./maya-v18-runtime.js', './maya-features/feature-registry.js', './maya-features/android-bridge.js', './maya-features/memory-v2.js', './maya-features/productivity.js', './maya-features/daily-briefing.js', './maya-features/advanced-loader.js', './maya-features/offline-commands.js', './maya-features/advanced-panel.html', './maya-features/private-vault.js', './maya-features/screenshot.js', './maya-features/voice-screenshot.js', ",1)
+              w = w.replace('const SHELL = [', "const SHELL = ['./maya-v18-runtime.js', './maya-features/feature-registry.js', './maya-features/android-bridge.js', './maya-features/memory-v2.js', './maya-features/productivity.js', './maya-features/daily-briefing.js', './maya-features/advanced-loader.js', './maya-features/offline-commands.js', './maya-features/advanced-panel.html', './maya-features/private-vault.js', './maya-features/screenshot.js', './maya-features/voice-screenshot.js', './maya-features/life-suite.js', ",1)
           sw.write_text(w, encoding='utf-8')
           print('Maya V18 integrated in www/ without editing original repository index.html or setup-native.sh')
           PY_V18
@@ -132,6 +144,11 @@ jobs:
           set -euo pipefail
           python3 scripts/ensure-launcher-query.py
           python3 scripts/install-screenshot.py
+          python3 scripts/install-life-native.py
+          grep -Fq 'public String takeSharedText()' android/app/src/main/java/com/tanim/maya/MayaBridge.java
+          grep -Fq 'MayaHomeWidget' android/app/src/main/AndroidManifest.xml
+          grep -Fq 'MayaQuickTile' android/app/src/main/AndroidManifest.xml
+          grep -Fq 'android.intent.action.SEND' android/app/src/main/AndroidManifest.xml
           grep -Fq 'registerPlugin(MayaScreenshot.class);' android/app/src/main/java/com/tanim/maya/MainActivity.java
           grep -Fq 'FOREGROUND_SERVICE_MEDIA_PROJECTION' android/app/src/main/AndroidManifest.xml
 
@@ -160,4 +177,4 @@ jobs:
           cp android/app/build/outputs/apk/debug/app-debug.apk Maya.apk
           gh release create "v${{ github.run_number }}" Maya.apk \
             --title "Maya v${{ github.run_number }}" \
-            --notes "Maya V22: opt-in Android screenshot with per-request consent, visible-transcript confirmation and launcher visibility. Old Maya retained."
+            --notes "Maya V24: Life Suite local tools, Android Share to Maya, home widget, Quick Settings shortcut and battery status. Previous Maya preserved. Not all 20 planned features are full native implementations."
