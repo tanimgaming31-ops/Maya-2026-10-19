@@ -2,6 +2,9 @@
   "name": "maya",
   "version": "1.0.0",
   "private": true,
+  "scripts": {
+    "capacitor:sync:after": "python3 scripts/ensure-launcher-query.py"
+  },
   "dependencies": {
     "@capacitor/android": "^6.2.0",
     "@capacitor/cli": "^6.2.0",
