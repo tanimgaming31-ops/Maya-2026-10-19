@@ -2,6 +2,18 @@ name: Build Maya APK
 
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/build-apk.yml'
+      - 'maya-v18-runtime.js'
+      - 'maya-features/**'
+      - 'index.html'
+      - 'setup-native.sh'
+      - 'sw.js'
+      - 'vendor/**'
+      - 'maya.vrm'
+      - 'package.json'
 
 permissions:
   contents: write
@@ -32,8 +44,8 @@ jobs:
           test -s maya-features/daily-briefing.js
           test -s maya-features/feature-registry.js
           test -s maya-features/android-bridge.js
-          node --check maya-v18-runtime.js
-          for js in maya-features/*.js; do node --check "$js"; done
+          node --input-type=module --check < maya-v18-runtime.js
+          for js in maya-features/*.js; do node --input-type=module --check < "$js"; done
           mkdir -p www
           cp index.html manifest.webmanifest sw.js icon-192.png icon-512.png www/
           cp -r vendor www/
