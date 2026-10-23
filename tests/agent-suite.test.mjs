@@ -1,0 +1,27 @@
+/* Maya Agent Suite V29 logic tests — no Gemini key, browser, or Android needed. */
+import {AGENT_CAPABILITIES,validatePlan,researchQueries,sourceLinks,readHistory} from '../maya-features/agent-suite.js';
+import assert from 'node:assert/strict';
+const throws=(f)=>assert.throws(f);
+assert.equal(AGENT_CAPABILITIES.length,8);
+assert.equal(new Set(AGENT_CAPABILITIES).size,8);
+const good=validatePlan({goal:'Compare two electric vehicle options',steps:[{summary:'Read reference',tool:'wikiSummary',args:{topic:'Electric car',lang:'en'}},{summary:'Look up current price',tool:'searchWeb',args:{query:'electric vehicle prices'}}]});
+assert.equal(good.steps.length,2);
+assert.equal(good.steps[0].tool,'wikiSummary');
+assert.equal(good.steps[0].args.lang,'en');
+assert.equal(good.steps[1].args.query,'electric vehicle prices');
+throws(()=>validatePlan({goal:'g',steps:[{tool:'searchWeb',args:{query:'cars'}}]}));
+throws(()=>validatePlan({goal:'Good goal',steps:[]}));
+throws(()=>validatePlan({goal:'Good goal',steps:[1,2,3,4,5].map(()=>({tool:'searchWeb',args:{query:'cars'}}))}));
+throws(()=>validatePlan({goal:'Good goal',steps:[{tool:'androidAction',args:{query:'sms'}}]}));
+throws(()=>validatePlan({goal:'Good goal',steps:[{tool:'searchWeb',args:{query:'x'}}]}));
+throws(()=>validatePlan({goal:'Good goal',steps:[{tool:'searchWeb',args:{query:'valid',danger:'write'}}]}));
+throws(()=>validatePlan({goal:'Good goal',steps:[{tool:'wikiSummary',args:{topic:'Paris',lang:'ru'}}]}));
+throws(()=>validatePlan({goal:'Good goal',steps:[{tool:'searchWeb',args:{query:{bad:true}}}]}));
+assert.equal(researchQueries('solar panels').length,3);
+throws(()=>researchQueries('x'));
+const refs=sourceLinks({candidates:[{groundingMetadata:{groundingChunks:[{web:{uri:'https://example.org/a',title:'Primary'}},{web:{uri:'http://example.org/a',title:'Not secure'}},{web:{uri:'https://example.org/a',title:'Duplicate'}},{web:{uri:'https://example.org/b',title:'Secondary'}},{web:{uri:'javascript:alert(1)',title:'Bad'}}]}}]});
+assert.deepEqual(refs.map(x=>x.url),['https://example.org/a','https://example.org/b']);
+assert.deepEqual(sourceLinks({candidates:[]}),[]);
+assert.deepEqual(readHistory({getItem:()=>null}),[]);
+assert.deepEqual(readHistory({getItem:()=>'{invalid'}),[]);
+console.log('Maya Agent Suite: 8 capability declarations, plan guards, research sourcing and history checks passed.');
