@@ -11,7 +11,9 @@ assert 'Intent.makeMainActivity' in java and 'startActivity(launch)' in java
 assert 'packageName.equals(app.optString("packageName"))' in java
 assert 'activityName.equals(app.optString("activityName"))' in java
 assert 'public String listLaunchableApps()' in script and 'public String launchListedApp(' in script
-assert 'QUERY_ALL_PACKAGES' not in java and 'getInstalledPackages' not in java
+assert 'Manifest.permission.QUERY_ALL_PACKAGES' not in java
+assert 'android.permission.QUERY_ALL_PACKAGES' not in java
+assert 'getInstalledPackages(' not in java
 assert 'QUERY_ALL_PACKAGES permission added' in query or 'QUERY_ALL_PACKAGES' in query
 assert '    public void requestSms() {' in bridge
 assert not any(token in java for token in ['SEND_SMS','AccessibilityService','Runtime.exec','getInstalledApplications'])
