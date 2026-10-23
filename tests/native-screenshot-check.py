@@ -14,7 +14,8 @@ assert 'FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION' in s and 'startForeground(' in
 assert 'MediaStore.Images.Media.IS_PENDING' in s
 assert 'registerPlugin(MayaScreenshot.class);' in i
 assert 'android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION' in i
-assert "'android.intent.category.LAUNCHER'" in q and 'QUERY_ALL_PACKAGES' not in q
+assert "'android.intent.category.LAUNCHER'" in q
+assert "android.permission.QUERY_ALL_PACKAGES" not in q
 assert 'Confirm screenshot' in v and '30000' in v
 assert 'typeof document' in v
 print('Native screenshot: consent, saving, launcher and plugin static checks passed.');
