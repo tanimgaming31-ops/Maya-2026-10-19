@@ -1,116 +1,48 @@
 <!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Maya Advanced</title>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#020205"><title>Maya — Advanced Panel</title>
 <style>
-body{font-family:system-ui,sans-serif;background:#0b1020;color:#eaf0ff;margin:0;padding:16px}
-.card{background:#151d33;border:1px solid #263252;border-radius:16px;padding:16px;margin-bottom:16px}
-h1{font-size:22px;margin:0 0 12px}h2{font-size:17px;margin:0 0 10px}
-input,select,button{font-size:15px;padding:10px;border-radius:10px;border:1px solid #33406b;background:#0e1530;color:#eaf0ff;width:100%;box-sizing:border-box;margin-bottom:8px}
-button{background:#4f7cff;border:0;font-weight:600;cursor:pointer}
-ul{padding-left:18px;margin:8px 0}
-li{margin-bottom:6px}
-.small{color:#9fb0d8;font-size:13px}
-</style>
-</head>
-<body>
+:root{color-scheme:dark}*{box-sizing:border-box}body{background:#020205;color:#e8f6ff;font:15px system-ui,Roboto,sans-serif;margin:0;padding:calc(16px + env(safe-area-inset-top)) 16px 35px}
+main{max-width:600px;margin:auto}h1{font-size:23px;margin:12px 0}h2{font-size:17px;margin:0 0 12px}
+a{color:#75eaff}.card{background:#111629;border:1px solid #325064;border-radius:15px;padding:15px;margin:14px 0}
+input,button{font:inherit;padding:10px;border-radius:10px;margin:5px 0;background:#0d182c;color:#e8f6ff;border:1px solid #3f566d;max-width:100%}
+input{width:100%}button{cursor:pointer;background:#12425c}button:disabled{opacity:.5}li{margin:10px 0;overflow-wrap:anywhere}
+.small{font-size:13px;color:#acc3d0}pre{white-space:pre-wrap;overflow-wrap:anywhere}#status{padding:10px;border-radius:10px;background:#172a35}
+</style></head><body><main>
+<a href="../index.html">← Back to original Maya</a>
 <h1>Maya Advanced</h1>
-<p class="small">This panel is part of your existing Maya project. It uses the same browser storage and will be connected to the main Maya screen in the next update.</p>
-
-<div class="card">
-<h2>Daily briefing</h2>
-<button id="briefing">Show today’s briefing</button>
-<pre id="briefingOut" class="small"></pre>
-</div>
-
-<div class="card">
-<h2>Add to-do</h2>
-<input id="todoTitle" placeholder="Task title">
-<button id="addTodo">Add to-do</button>
-<ul id="todoList"></ul>
-</div>
-
-<div class="card">
-<h2>Add reminder</h2>
-<input id="reminderTitle" placeholder="Reminder title">
-<input id="reminderTime" type="datetime-local">
-<button id="addReminder">Set reminder</button>
-<ul id="reminderList"></ul>
-</div>
-
-<div class="card">
-<h2>Add calendar event</h2>
-<input id="eventTitle" placeholder="Event title">
-<input id="eventTime" type="datetime-local">
-<button id="addEvent">Add event</button>
-<ul id="eventList"></ul>
-</div>
-
+<p class="small">Part of your existing Maya app. To-dos, reminders and daily briefing share V18's local storage. Your original Memory Packs are not changed. Opening this separate page may end a live voice session.</p>
+<section class="card"><h2>Daily briefing</h2><button id="briefing">Show today's briefing</button><pre id="briefingOut" class="small"></pre></section>
+<section class="card"><h2>Shared To-do list</h2><input id="todoTitle" maxlength="200" placeholder="New task"><button id="addTodo">Add To-do</button><ul id="todoList"></ul></section>
+<section class="card"><h2>In-app reminders</h2><input id="reminderTitle" maxlength="140" placeholder="Reminder title">
+<input id="reminderTime" type="datetime-local"><button id="addReminder">Save in-app reminder</button><ul id="reminderList"></ul>
+<p class="small">These web reminders are not Android alarms. Keep Maya open for reliable alerts; use original Maya V9 for screen-off native reminders.</p></section>
+<section class="card"><h2>Internal calendar events</h2><input id="eventTitle" maxlength="140" placeholder="Event title">
+<input id="eventTime" type="datetime-local"><button id="addEvent">Save internal event</button><ul id="eventList"></ul>
+<p class="small">Stored inside Maya, not synced to your Android Calendar.</p></section>
+<p id="status" role="status" aria-live="polite">Ready.</p>
 <script type="module">
-import { addMemory } from "./memory-v2.js";
-import { createTodo, completeTodo, listTodos, createReminder, createCalendarEvent, listToday } from "./productivity.js";
-import { buildDailyBriefing } from "./daily-briefing.js";
-
-const $ = id => document.getElementById(id);
-
-function refresh() {
-  const todos = listTodos();
-  $("todoList").innerHTML = todos.length ? todos.map(t =>
-    `<li>${t.done ? "✅" : "⬜"} ${t.title} <button data-done="${t.id}" style="width:auto;padding:4px 8px;margin-left:8px">Done</button></li>`
-  ).join("") : "<li>No to-do items yet.</li>";
-
-  const today = listToday();
-  $("reminderList").innerHTML = today.reminders.length ? today.reminders.map(r =>
-    `<li>⏰ ${r.title} — ${new Date(r.datetime).toLocaleString()}</li>`
-  ).join("") : "<li>No reminders today.</li>";
-
-  $("eventList").innerHTML = today.events.length ? today.events.map(e =>
-    `<li>📅 ${e.title} — ${new Date(e.datetime).toLocaleString()}</li>`
-  ).join("") : "<li>No events today.</li>";
+import { loadProductivity, createTodo, completeTodo, deleteTodo, createReminder, createCalendarEvent } from './productivity.js';
+import { buildDailyBriefing } from './daily-briefing.js';
+const $=id=>document.getElementById(id);
+const status=s=>{$('status').textContent=String(s);};
+const label=(tag,s)=>{const e=document.createElement(tag);e.textContent=String(s);return e;};
+const checkWhen=id=>{const t=$(id).value;const ms=new Date(t).getTime();if(!Number.isFinite(ms)||ms<=Date.now()||ms>Date.now()+30*86400000)throw Error('Choose a future time within 30 days.');return t;};
+function row(container,title,done,remove){
+ const li=label('li',title+' ');if(done){const b=label('button','Done');b.onclick=done;li.append(b);}
+ if(remove){const b=label('button','Delete');b.onclick=remove;li.append(b);}
+ container.append(li);
 }
-
-$("briefing").onclick = () => {
-  $("briefingOut").textContent = buildDailyBriefing();
-};
-
-$("addTodo").onclick = () => {
-  const title = $("todoTitle").value.trim();
-  if (!title) return alert("Please enter a task title.");
-  createTodo({ title });
-  addMemory(`Has a to-do: ${title}`, "plan", "low");
-  $("todoTitle").value = "";
-  refresh();
-};
-
-$("addReminder").onclick = () => {
-  const title = $("reminderTitle").value.trim();
-  const datetime = $("reminderTime").value;
-  if (!title || !datetime) return alert("Please enter a title and time.");
-  createReminder({ title, datetime });
-  $("reminderTitle").value = "";
-  refresh();
-};
-
-$("addEvent").onclick = () => {
-  const title = $("eventTitle").value.trim();
-  const datetime = $("eventTime").value;
-  if (!title || !datetime) return alert("Please enter a title and time.");
-  createCalendarEvent({ title, datetime });
-  $("eventTitle").value = "";
-  refresh();
-};
-
-document.addEventListener("click", event => {
-  const id = event.target?.dataset?.done;
-  if (id) {
-    completeTodo(id);
-    refresh();
-  }
-});
-
-refresh();
-</script>
-</body>
-</html>
+function refresh(){
+ const d=loadProductivity();for(const name of ['todoList','reminderList','eventList'])$(name).replaceChildren();
+ for(const t of (d.todos||[]).slice(-100).reverse())row($('todoList'),(t.done?'✓ ':'○ ')+t.title,t.done?null:()=>{completeTodo(t.id);refresh();},()=>{if(confirm('Delete this To-do?')){deleteTodo(t.id);refresh();}});
+ for(const r of (d.reminders||[]).slice(-60).reverse())row($('reminderList'),r.title+' — '+new Date(r.datetime).toLocaleString());
+ for(const e of (d.events||[]).slice(-60).reverse())row($('eventList'),e.title+' — '+new Date(e.datetime).toLocaleString());
+}
+$('briefing').onclick=()=>{try{$('briefingOut').textContent=buildDailyBriefing();status('Built from locally saved items; no live news claimed.');}catch(e){status(e.message);}};
+$('addTodo').onclick=()=>{try{const title=$('todoTitle').value.trim();if(!title)throw Error('Enter a task title.');createTodo({title});$('todoTitle').value='';refresh();status('To-do saved locally and shared with V18.');}catch(e){status(e.message);}};
+$('addReminder').onclick=()=>{try{const title=$('reminderTitle').value.trim();if(!title)throw Error('Enter a reminder title.');const datetime=checkWhen('reminderTime');createReminder({title,datetime});$('reminderTitle').value='';refresh();status('In-app reminder saved. Not scheduled as a background Android alarm.');}catch(e){status(e.message);}};
+$('addEvent').onclick=()=>{try{const title=$('eventTitle').value.trim();if(!title)throw Error('Enter an event title.');const datetime=checkWhen('eventTime');createCalendarEvent({title,datetime});$('eventTitle').value='';refresh();status('Saved as a local Maya event; not in Android Calendar.');}catch(e){status(e.message);}};
+try{refresh();}catch(e){status('Unable to display saved items: '+e.message);}
+</script></main></body></html>

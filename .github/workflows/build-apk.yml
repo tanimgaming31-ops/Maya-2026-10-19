@@ -1,31 +1,100 @@
 name: Build Maya APK
+
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/build-apk.yml'
+      - 'maya-v18-runtime.js'
+      - 'maya-features/**'
+      - 'index.html'
+      - 'setup-native.sh'
+      - 'sw.js'
+      - 'vendor/**'
+      - 'maya.vrm'
+      - 'package.json'
+
 permissions:
   contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-node@v4
         with:
           node-version: 20
+
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: 17
-      - name: Collect web files
+
+      - name: Collect web files and integrate Maya V18 modules
         run: |
+          set -euo pipefail
+          test -s index.html
+          test -s setup-native.sh
+          test -s maya-v18-runtime.js
+          test -s maya-features/memory-v2.js
+          test -s maya-features/productivity.js
+          test -s maya-features/daily-briefing.js
+          test -s maya-features/feature-registry.js
+          test -s maya-features/android-bridge.js
+          test -s maya-features/advanced-loader.js
+          test -s maya-features/offline-commands.js
+          test -s maya-features/advanced-panel.html
+          node --input-type=module --check < maya-v18-runtime.js
+          python3 - <<'PY_ADVANCED_TEST'
+          from pathlib import Path
+          import re
+          s=Path('maya-features/advanced-panel.html').read_text(encoding='utf-8')
+          m=re.search(r'<script type="module">([\s\S]+?)</script>',s)
+          if not m: raise SystemExit('Advanced panel module is missing')
+          Path('/tmp/maya-advanced-panel.mjs').write_text(m.group(1),encoding='utf-8')
+          PY_ADVANCED_TEST
+          node --input-type=module --check < /tmp/maya-advanced-panel.mjs
+          for js in maya-features/*.js; do node --input-type=module --check < "$js"; done
           mkdir -p www
           cp index.html manifest.webmanifest sw.js icon-192.png icon-512.png www/
           cp -r vendor www/
-          cp -r maya-features www/
           if [ -f maya.vrm ]; then cp maya.vrm www/; fi
+          # Integrate existing new modules into the ACTUAL APK assets.
+          cp -r maya-features www/
+          cp maya-v18-runtime.js www/
+          python3 - <<'PY_V18'
+          from pathlib import Path
+          import re
+          html = Path('www/index.html')
+          s = html.read_text(encoding='utf-8')
+          marker = '<script type="module" src="./maya-v18-runtime.js"></script>'
+          if marker not in s:
+              if '</body>' not in s: raise SystemExit('Cannot find </body> in original Maya index.html')
+              s = s.replace('</body>', marker+'\n</body>', 1)
+          html.write_text(s, encoding='utf-8')
+          sw = Path('www/sw.js')
+          w = sw.read_text(encoding='utf-8')
+          w = re.sub(r"const V = '[^']+';", "const V = 'maya-v19-advanced-20261023';", w, count=1)
+          if "'./maya-v18-runtime.js'" not in w:
+              if 'const SHELL = [' not in w: raise SystemExit('Unexpected sw.js shell declaration')
+              w = w.replace('const SHELL = [', "const SHELL = ['./maya-v18-runtime.js', './maya-features/feature-registry.js', './maya-features/android-bridge.js', './maya-features/memory-v2.js', './maya-features/productivity.js', './maya-features/daily-briefing.js', './maya-features/advanced-loader.js', './maya-features/offline-commands.js', './maya-features/advanced-panel.html', ",1)
+          sw.write_text(w, encoding='utf-8')
+          print('Maya V18 integrated in www/ without editing original repository index.html or setup-native.sh')
+          PY_V18
+          grep -Fq 'maya-v18-runtime.js' www/index.html
+          test -s www/maya-features/memory-v2.js
+          test -s www/maya-features/productivity.js
+          test -s www/maya-features/daily-briefing.js
+
       - name: Install Capacitor
         run: npm install
+
       - name: Create Android project
         run: npx cap add android
+
       - name: Load private signing key (optional, for seamless updates)
         env:
           MAYA_SIGNING_KEY_B64: ${{ secrets.MAYA_SIGNING_KEY_B64 }}
@@ -37,23 +106,29 @@ jobs:
           else
             echo "No signing secret configured. A new debug key will be used; it may not update a previous installation."
           fi
+
       - name: Add Maya native features
         run: |
           if [ -f setup-native.sh ]; then bash setup-native.sh; fi
+
       - name: Add permissions (microphone, camera)
         run: |
           sed -i 's#<application#<uses-permission android:name="android.permission.RECORD_AUDIO" />\n    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />\n    <uses-permission android:name="android.permission.CAMERA" />\n    <application#' android/app/src/main/AndroidManifest.xml
           grep -n "uses-permission" android/app/src/main/AndroidManifest.xml
+
       - name: Sync web files into the app
         run: npx cap sync android
+
       - name: Build APK
         working-directory: android
         run: ./gradlew assembleDebug --no-daemon
+
       - name: Keep a copy as a build artifact
         uses: actions/upload-artifact@v4
         with:
           name: Maya-apk
           path: android/app/build/outputs/apk/debug/app-debug.apk
+
       - name: Publish a download link (GitHub Release)
         env:
           GH_TOKEN: ${{ github.token }}
@@ -61,4 +136,4 @@ jobs:
           cp android/app/build/outputs/apk/debug/app-debug.apk Maya.apk
           gh release create "v${{ github.run_number }}" Maya.apk \
             --title "Maya v${{ github.run_number }}" \
-            --notes "Download Maya.apk and install it on any Android phone."
+            --notes "Maya update. Advanced categorized memory, in-app productivity and daily briefing added without replacing original Maya."
