@@ -1,0 +1,17 @@
+/* Maya advanced entry point; keeps controls inside Settings, not over the voice call. */
+import './offline-commands.js';
+function init(){
+  const host=document.querySelector('#setSheet .body');
+  if(!host||document.getElementById('mayaAdvancedLink'))return;
+  const area=document.createElement('section');
+  area.style.cssText='margin:14px 0;padding:12px;border:1px solid var(--line,#456);border-radius:12px';
+  const title=document.createElement('strong');title.textContent='Maya Advanced Panel';
+  const note=document.createElement('p');note.className='note';
+  note.textContent='Shared local To-dos and in-app events; opening the separate panel may interrupt an active voice call.';
+  const a=document.createElement('a');a.id='mayaAdvancedLink';
+  a.href=new URL('./advanced-panel.html',import.meta.url).href;
+  a.textContent='Open Advanced Panel →';a.className='btn';
+  a.style.cssText='display:inline-block;text-decoration:none;margin:4px 0';
+  area.append(title,note,a);host.append(area);
+}
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init,{once:true});else init();

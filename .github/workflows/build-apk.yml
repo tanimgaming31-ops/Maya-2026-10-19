@@ -44,7 +44,19 @@ jobs:
           test -s maya-features/daily-briefing.js
           test -s maya-features/feature-registry.js
           test -s maya-features/android-bridge.js
+          test -s maya-features/advanced-loader.js
+          test -s maya-features/offline-commands.js
+          test -s maya-features/advanced-panel.html
           node --input-type=module --check < maya-v18-runtime.js
+          python3 - <<'PY_ADVANCED_TEST'
+          from pathlib import Path
+          import re
+          s=Path('maya-features/advanced-panel.html').read_text(encoding='utf-8')
+          m=re.search(r'<script type="module">([\s\S]+?)</script>',s)
+          if not m: raise SystemExit('Advanced panel module is missing')
+          Path('/tmp/maya-advanced-panel.mjs').write_text(m.group(1),encoding='utf-8')
+          PY_ADVANCED_TEST
+          node --input-type=module --check < /tmp/maya-advanced-panel.mjs
           for js in maya-features/*.js; do node --input-type=module --check < "$js"; done
           mkdir -p www
           cp index.html manifest.webmanifest sw.js icon-192.png icon-512.png www/
@@ -65,10 +77,10 @@ jobs:
           html.write_text(s, encoding='utf-8')
           sw = Path('www/sw.js')
           w = sw.read_text(encoding='utf-8')
-          w = re.sub(r"const V = '[^']+';", "const V = 'maya-v18-integration-20261023';", w, count=1)
+          w = re.sub(r"const V = '[^']+';", "const V = 'maya-v19-advanced-20261023';", w, count=1)
           if "'./maya-v18-runtime.js'" not in w:
               if 'const SHELL = [' not in w: raise SystemExit('Unexpected sw.js shell declaration')
-              w = w.replace('const SHELL = [', "const SHELL = ['./maya-v18-runtime.js', './maya-features/feature-registry.js', './maya-features/android-bridge.js', './maya-features/memory-v2.js', './maya-features/productivity.js', './maya-features/daily-briefing.js', ",1)
+              w = w.replace('const SHELL = [', "const SHELL = ['./maya-v18-runtime.js', './maya-features/feature-registry.js', './maya-features/android-bridge.js', './maya-features/memory-v2.js', './maya-features/productivity.js', './maya-features/daily-briefing.js', './maya-features/advanced-loader.js', './maya-features/offline-commands.js', './maya-features/advanced-panel.html', ",1)
           sw.write_text(w, encoding='utf-8')
           print('Maya V18 integrated in www/ without editing original repository index.html or setup-native.sh')
           PY_V18
