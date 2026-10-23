@@ -1,6 +1,7 @@
 import './offline-commands.js';
 import './private-vault.js';
 import './screenshot.js';
+import './voice-screenshot.js';
 function init(){
  const host=document.querySelector('#setSheet .body');
  if(!host||document.getElementById('mayaAdvancedLink'))return;
