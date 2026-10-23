@@ -1,5 +1,6 @@
 /* Maya V25 unified Life Suite commands: opt-in, local and confirmation-first. */
 import {addRecord,loadData,searchNotes,weekly} from './life-suite.js';
+import {parseHubCommand,executeHubCommand} from './smart-hub.js';
 export const VOICE_KEY='maya_life_voice_v25';
 const digitMap={'০':'0','১':'1','২':'2','৩':'3','৪':'4','৫':'5','৬':'6','৭':'7','৮':'8','৯':'9'};
 const clean=v=>String(v||'').normalize('NFKC').replace(/[০-৯]/gu,c=>digitMap[c]).replace(/^(?:you|আপনি)\s*:\s*/iu,'').replace(/^[“"‘]+|[”"’]+$/gu,'').replace(/[।!?]+$/gu,'').replace(/\s+/gu,' ').trim();
@@ -25,7 +26,7 @@ export function parseLifeVoice(raw){
  m=t.match(/^(?:আমার\s+)?নোট\s*(?:খুঁজে দাও|খোঁজো|সার্চ করো)\s+(.+)$/u)||t.match(/^(?:find|search)\s+(?:my\s+)?notes?\s+(?:for\s+)?(.+)$/iu);
  if(m)return {kind:'search',query:short(m[1],120)};
  if(/^(?:আমার\s+)?ডা(?:য়|য়)েরি\s+দেখাও$/u.test(t)||/^(?:show|list)\s+(?:my\s+)?diary$/iu.test(t))return {kind:'diaryList'};
- return null;
+ return parseHubCommand(t);
 }
 const el=id=>typeof document!=='undefined'?document.getElementById(id):null;
 let pending=null,busy=false;
@@ -60,6 +61,7 @@ export async function runLifeVoice(command){
  try{
   let msg='';
   switch(command.kind){
+   case 'hub':msg=await executeHubCommand(command,ask);break;
    case 'diary':
     if(command.body.length<3||secretLike(command.body))return report('Diary text is invalid or sensitive; not saved.');
     if(!await ask('Save this diary locally (unencrypted)?\n'+command.body))return report('Diary save cancelled or expired.');
@@ -111,7 +113,7 @@ export function consumeLive(text){if(!recognizes(text))return false;void runLife
 function mount(){
  const host=document.querySelector('#setSheet .body');if(!host||el('lifeVoiceEnabled'))return;
  const panel=document.createElement('section');panel.style.cssText='margin:12px 0;padding:12px;border:1px solid #6286b4;border-radius:13px';
- const heading=document.createElement('h3');heading.textContent='Maya Unified Life Voice V25';
+ const heading=document.createElement('h3');heading.textContent='Maya Unified Life Voice V27';
  const row=document.createElement('label'),toggle=document.createElement('input');toggle.type='checkbox';toggle.id='lifeVoiceEnabled';toggle.checked=enabled();
  row.append(toggle,document.createTextNode(' Enable Life Suite voice and typed commands'));
  const hints=document.createElement('p');hints.className='note';hints.textContent='Say: মায়া, আমার ডায়েরিতে লিখো আজ ভালো আছি / মায়া, আজ ২০ দিরহাম খরচ করেছি / মায়া, ২৫ মিনিট ফোকাস চালু করো / মায়া, আমার ব্যাটারি কত / মায়া, নোট খুঁজে দাও বাজার. Every command must begin with Maya or মায়া. Saving data and starting Focus requires on-screen confirmation.';

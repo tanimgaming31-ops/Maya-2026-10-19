@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 const voice=readFileSync(new URL('../maya-features/life-voice.js',import.meta.url),'utf8');
 const source=voice.replace(/^import \{addRecord,loadData,searchNotes,weekly\} from '\.\/life-suite\.js';/m,"const addRecord=()=>{},loadData=()=>({diary:[]}),searchNotes=()=>[],weekly=()=>({diary:0,flashcards:0,focusMinutes:0,spent:{}});");
-const api=await import('data:text/javascript;base64,'+Buffer.from(source).toString('base64'));
+const api=await import('data:text/javascript;base64,'+Buffer.from(source.replace(/^import \{parseHubCommand,executeHubCommand\} from '\.\/smart-hub\.js';/m,"const parseHubCommand=t=>t==='show my tasks'?{kind:'hub',action:'todoList'}:null;const executeHubCommand=async()=> 'Task list opened.';")).toString('base64'));
 const ok=[
  ['মায়া, আমার ডায়েরিতে লিখো আজ ভালো আছি','diary'],
  ['মায়া আমার ডায়েরিতে লেখো আজ আনন্দ হচ্ছে','diary'],
@@ -23,7 +23,8 @@ const ok=[
  ['মায়া সপ্তাহের হিসাব বলো','weekly'],
  ['Maya show weekly summary','weekly'],
  ['মায়া আমার ডায়েরি দেখাও','diaryList'],
- ['Maya open life suite','open']
+ ['Maya open life suite','open'],
+ ['Maya show my tasks','hub']
 ];
 for(const [phrase,kind] of ok)assert.equal(api.parseLifeVoice(phrase)?.kind,kind,phrase);
 assert.equal(api.parseLifeVoice('মায়া, আজ ২০ দিরহাম খরচ করেছি')?.amount,20);

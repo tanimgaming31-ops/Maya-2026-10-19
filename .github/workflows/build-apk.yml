@@ -51,6 +51,8 @@ jobs:
           test -s maya-features/advanced-loader.js
           test -s maya-features/life-suite.js
           test -s maya-features/life-voice.js
+          test -s maya-features/smart-hub.js
+          test -s tests/smart-hub.test.mjs
           test -s tests/life-voice.test.mjs
           test -s native-life/MayaShareInbox.java
           test -s native-life/MayaHomeWidget.java
@@ -85,6 +87,7 @@ jobs:
           node tests/private-vault.test.mjs
           node tests/life-suite.test.mjs
           node tests/life-voice.test.mjs
+          node tests/smart-hub.test.mjs
           python3 tests/life-native-check.py
           node tests/voice-screenshot.test.cjs
           python3 tests/native-screenshot-check.py
@@ -108,10 +111,10 @@ jobs:
           html.write_text(s, encoding='utf-8')
           sw = Path('www/sw.js')
           w = sw.read_text(encoding='utf-8')
-          w = re.sub(r"const V = '[^']+';", "const V = 'maya-v25-unified-life-voice-20261023';", w, count=1)
+          w = re.sub(r"const V = '[^']+';", "const V = 'maya-v27-smart-hub-20261024';", w, count=1)
           if "'./maya-v18-runtime.js'" not in w:
               if 'const SHELL = [' not in w: raise SystemExit('Unexpected sw.js shell declaration')
-              w = w.replace('const SHELL = [', "const SHELL = ['./maya-v18-runtime.js', './maya-features/feature-registry.js', './maya-features/android-bridge.js', './maya-features/memory-v2.js', './maya-features/productivity.js', './maya-features/daily-briefing.js', './maya-features/advanced-loader.js', './maya-features/offline-commands.js', './maya-features/advanced-panel.html', './maya-features/private-vault.js', './maya-features/screenshot.js', './maya-features/voice-screenshot.js', './maya-features/life-suite.js', './maya-features/life-voice.js', ",1)
+              w = w.replace('const SHELL = [', "const SHELL = ['./maya-v18-runtime.js', './maya-features/feature-registry.js', './maya-features/android-bridge.js', './maya-features/memory-v2.js', './maya-features/productivity.js', './maya-features/daily-briefing.js', './maya-features/advanced-loader.js', './maya-features/offline-commands.js', './maya-features/advanced-panel.html', './maya-features/private-vault.js', './maya-features/screenshot.js', './maya-features/voice-screenshot.js', './maya-features/life-suite.js', './maya-features/life-voice.js', './maya-features/smart-hub.js', ",1)
           sw.write_text(w, encoding='utf-8')
           print('Maya V18 integrated in www/ without editing original repository index.html or setup-native.sh')
           PY_V18
@@ -180,4 +183,4 @@ jobs:
           cp android/app/build/outputs/apk/debug/app-debug.apk Maya.apk
           gh release create "v${{ github.run_number }}" Maya.apk \
             --title "Maya v${{ github.run_number }}" \
-            --notes "Maya V25: opt-in unified Bengali/English Life Suite commands for diary, expenses, focus, notes, battery and weekly insights. Data writes need on-screen confirmation. Existing Maya preserved. Gemini Live transcript routing and Android microphone require device testing."
+            --notes "Maya Smart Hub V27: shared To-do voice commands, local categorized-memory search, one-tap morning/focus/evening routines, local privacy overview and tap-to-test Android microphone/camera diagnostics. Confirmed local writes, no background autonomy. Old Maya intact; phone hardware requires testing."

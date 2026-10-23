@@ -38,3 +38,12 @@ Maya will not automatically send WhatsApp, Messenger, IMO, or SMS messages. It w
 - Local, tested parser: confirmed Diary, Expenses (AED/BDT/USD/INR/EUR), Knowledge Notes; foreground Focus via existing Life Suite timer. Read-only: local note search, latest diary summary, weekly insights, native battery status. Open Life Suite shortcut.
 - Saved data and starting Focus show Confirm/Cancel UI (30-second timeout); opt-in off by default; hidden app cancels pending confirmation. Sensitive-looking passwords/OTP text is refused for diary/notes. Life Suite localStorage remains unencrypted; Private Vault is separate.
 - Test from Settings with a typed command. Fallback voice uses existing device voice and speech synthesis; Gemini Live confirmation may only display on screen. Manual Android/device checks are required. No automatic WhatsApp/IMO/Messenger sending or new dangerous permissions.
+
+## Maya Smart Hub — Advanced V27
+- One new Settings button inside original Maya, not an app. Built-in Morning Brief, Focus Preparation, Evening Review, Memory Check. Custom local routines: up to 25 with 1–5 whitelisted steps; explicit tap/voice invocation only.
+- Shared To-do board uses existing `maya_productivity_v1`, no duplicate storage. Add/complete/delete actions are user-driven. Voice-added tasks require visible 30-second Confirm/Cancel.
+- Additional Bengali/English `Maya` / `মায়া` commands: add To-do, list To-dos, search categorized Memory V2, local daily briefing, run a named built-in routine, privacy and read-only capability diagnostics. Requires existing opt-in Life Voice toggle, supported speech engine or text input.
+- Real Microphone and Camera tests require explicit tap, request Android/WebView permission and immediately close tracks. They do not record, save or transmit audio/video. A failed test is reported as a failure.
+- Routines never run autonomously in the background; Focus uses the existing foreground Life Suite timer after confirmation. No external message sending, no auto-app control, no weather or news fabrication.
+- Custom routine export/import uses strict validation and replacement confirmation; unencrypted JSON. Original Maya Memories/Memory Packs, Private Vault, Avatar, Voice code and Gemini settings remain separate.
+- GitHub compilation/tests verify code and Android build, **not** real-device voice or native permission functionality.
