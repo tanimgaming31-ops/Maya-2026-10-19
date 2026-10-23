@@ -12,12 +12,13 @@ const aliases={
  'চ্যাটজিপিটি':'chatgpt','স্পটিফাই':'spotify','স্ন্যাপচ্যাট':'snapchat'
 };
 export function normalizeName(value){
- return String(value||'').normalize('NFKC').toLocaleLowerCase().replace(/[^\p{L}\p{N}]+/gu,' ').replace(/\s+/gu,' ').trim();
+ return String(value||'').normalize('NFKC').toLocaleLowerCase().replace(/[^\p{L}\p{M}\p{N}]+/gu,' ').replace(/\s+/gu,' ').trim();
 }
 export function targetName(value){
  const cleaned=normalizeName(String(value||'').replace(/(?:\s+অ্যাপ(?:টা|টি)?|\s+app)$/iu,''));
  const shortened=cleaned.replace(/(টা|টি)$/u,'');
- return aliases[cleaned]||aliases[shortened]||cleaned;
+ for(const [alias,canonical] of Object.entries(aliases)) { const key=normalizeName(alias); if(key===cleaned||key===shortened)return canonical; }
+ return cleaned;
 }
 export function parseOpenAppCommand(raw){
  const t=String(raw||'').normalize('NFKC').replace(/[।!?]+$/gu,'').trim();
