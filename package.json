@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "capacitor:sync:after": "python3 scripts/ensure-launcher-query.py"
+    "capacitor:sync:after": "python3 scripts/ensure-launcher-query.py && python3 scripts/install-screenshot.py"
   },
   "dependencies": {
     "@capacitor/android": "^6.2.0",

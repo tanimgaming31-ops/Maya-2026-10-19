@@ -1,5 +1,6 @@
 import './offline-commands.js';
 import './private-vault.js';
+import './screenshot.js';
 function init(){
  const host=document.querySelector('#setSheet .body');
  if(!host||document.getElementById('mayaAdvancedLink'))return;
