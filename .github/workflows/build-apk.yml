@@ -21,13 +21,49 @@ jobs:
           distribution: temurin
           java-version: 17
 
-      - name: Collect web files
+      - name: Collect web files and integrate Maya V18 modules
         run: |
+          set -euo pipefail
+          test -s index.html
+          test -s setup-native.sh
+          test -s maya-v18-runtime.js
+          test -s maya-features/memory-v2.js
+          test -s maya-features/productivity.js
+          test -s maya-features/daily-briefing.js
+          test -s maya-features/feature-registry.js
+          test -s maya-features/android-bridge.js
+          node --check maya-v18-runtime.js
+          for js in maya-features/*.js; do node --check "$js"; done
           mkdir -p www
           cp index.html manifest.webmanifest sw.js icon-192.png icon-512.png www/
-          # V8: bundled 3D engine + 3D Maya model so they work offline in the app
           cp -r vendor www/
           if [ -f maya.vrm ]; then cp maya.vrm www/; fi
+          # Integrate existing new modules into the ACTUAL APK assets.
+          cp -r maya-features www/
+          cp maya-v18-runtime.js www/
+          python3 - <<'PY_V18'
+          from pathlib import Path
+          import re
+          html = Path('www/index.html')
+          s = html.read_text(encoding='utf-8')
+          marker = '<script type="module" src="./maya-v18-runtime.js"></script>'
+          if marker not in s:
+              if '</body>' not in s: raise SystemExit('Cannot find </body> in original Maya index.html')
+              s = s.replace('</body>', marker+'\n</body>', 1)
+          html.write_text(s, encoding='utf-8')
+          sw = Path('www/sw.js')
+          w = sw.read_text(encoding='utf-8')
+          w = re.sub(r"const V = '[^']+';", "const V = 'maya-v18-integration-20261023';", w, count=1)
+          if "'./maya-v18-runtime.js'" not in w:
+              if 'const SHELL = [' not in w: raise SystemExit('Unexpected sw.js shell declaration')
+              w = w.replace('const SHELL = [', "const SHELL = ['./maya-v18-runtime.js', './maya-features/feature-registry.js', './maya-features/android-bridge.js', './maya-features/memory-v2.js', './maya-features/productivity.js', './maya-features/daily-briefing.js', ",1)
+          sw.write_text(w, encoding='utf-8')
+          print('Maya V18 integrated in www/ without editing original repository index.html or setup-native.sh')
+          PY_V18
+          grep -Fq 'maya-v18-runtime.js' www/index.html
+          test -s www/maya-features/memory-v2.js
+          test -s www/maya-features/productivity.js
+          test -s www/maya-features/daily-briefing.js
 
       - name: Install Capacitor
         run: npm install
@@ -76,4 +112,4 @@ jobs:
           cp android/app/build/outputs/apk/debug/app-debug.apk Maya.apk
           gh release create "v${{ github.run_number }}" Maya.apk \
             --title "Maya v${{ github.run_number }}" \
-            --notes "Download Maya.apk and install it on any Android phone."
+            --notes "Maya update. Advanced categorized memory, in-app productivity and daily briefing added without replacing original Maya."
