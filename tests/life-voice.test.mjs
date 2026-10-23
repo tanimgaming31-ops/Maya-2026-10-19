@@ -25,6 +25,8 @@ const ok=[
  ['Maya show weekly summary','weekly'],
  ['মায়া আমার ডায়েরি দেখাও','diaryList'],
  ['Maya open life suite','open'],
+ ['Maya open agent suite','agentOpen'],
+ ['মায়া এজেন্ট খোলো','agentOpen'],
  ['Maya show my tasks','hub'],
  ['Maya open Telegram','appLaunch']
 ];
@@ -48,4 +50,4 @@ assert.ok(index.includes('MayaLifeVoice?.consumeLive(t)'),'live transcript route
 assert.ok(index.includes('MayaLifeVoice?.recognizes(text)'),'fallback speech router missing');
 assert.ok(loader.includes("import './life-voice.js'"),'voice module not loaded');
 assert.ok(suite.includes('maya:life-data-changed'),'Life Suite UI not refreshed after voice');
-console.log('Maya Life Voice: 40 parser/security and integration assertions passed (not an Android device microphone test).');
+console.log('Maya Life Voice: parser/security and integration assertions passed (not an Android device microphone test).');
