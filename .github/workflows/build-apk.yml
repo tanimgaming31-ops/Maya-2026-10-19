@@ -46,6 +46,14 @@ jobs:
           test -s maya-features/android-bridge.js
           test -s maya-features/advanced-loader.js
           test -s maya-features/private-vault.js
+          test -s maya-features/screenshot.js
+          test -s maya-features/voice-screenshot.js
+          test -s native-screenshot/MayaScreenshot.java
+          test -s native-screenshot/MayaCaptureService.java
+          test -s scripts/install-screenshot.py
+          test -s scripts/ensure-launcher-query.py
+          test -s tests/voice-screenshot.test.cjs
+          test -s tests/native-screenshot-check.py
           test -s tests/private-vault.test.mjs
           test -s maya-features/offline-commands.js
           test -s maya-features/advanced-panel.html
@@ -60,6 +68,8 @@ jobs:
           PY_ADVANCED_TEST
           node --input-type=module --check < /tmp/maya-advanced-panel.mjs
           node tests/private-vault.test.mjs
+          node tests/voice-screenshot.test.cjs
+          python3 tests/native-screenshot-check.py
           for js in maya-features/*.js; do node --input-type=module --check < "$js"; done
           mkdir -p www
           cp index.html manifest.webmanifest sw.js icon-192.png icon-512.png www/
@@ -80,10 +90,10 @@ jobs:
           html.write_text(s, encoding='utf-8')
           sw = Path('www/sw.js')
           w = sw.read_text(encoding='utf-8')
-          w = re.sub(r"const V = '[^']+';", "const V = 'maya-v21-private-vault-20261023';", w, count=1)
+          w = re.sub(r"const V = '[^']+';", "const V = 'maya-v22-screenshot-20261023';", w, count=1)
           if "'./maya-v18-runtime.js'" not in w:
               if 'const SHELL = [' not in w: raise SystemExit('Unexpected sw.js shell declaration')
-              w = w.replace('const SHELL = [', "const SHELL = ['./maya-v18-runtime.js', './maya-features/feature-registry.js', './maya-features/android-bridge.js', './maya-features/memory-v2.js', './maya-features/productivity.js', './maya-features/daily-briefing.js', './maya-features/advanced-loader.js', './maya-features/offline-commands.js', './maya-features/advanced-panel.html', './maya-features/private-vault.js', ",1)
+              w = w.replace('const SHELL = [', "const SHELL = ['./maya-v18-runtime.js', './maya-features/feature-registry.js', './maya-features/android-bridge.js', './maya-features/memory-v2.js', './maya-features/productivity.js', './maya-features/daily-briefing.js', './maya-features/advanced-loader.js', './maya-features/offline-commands.js', './maya-features/advanced-panel.html', './maya-features/private-vault.js', './maya-features/screenshot.js', './maya-features/voice-screenshot.js', ",1)
           sw.write_text(w, encoding='utf-8')
           print('Maya V18 integrated in www/ without editing original repository index.html or setup-native.sh')
           PY_V18
@@ -114,6 +124,14 @@ jobs:
         run: |
           if [ -f setup-native.sh ]; then bash setup-native.sh; fi
 
+      - name: Install consent-based screenshot and launcher visibility
+        run: |
+          set -euo pipefail
+          python3 scripts/ensure-launcher-query.py
+          python3 scripts/install-screenshot.py
+          grep -Fq 'registerPlugin(MayaScreenshot.class);' android/app/src/main/java/com/tanim/maya/MainActivity.java
+          grep -Fq 'FOREGROUND_SERVICE_MEDIA_PROJECTION' android/app/src/main/AndroidManifest.xml
+
       - name: Add permissions (microphone, camera)
         run: |
           sed -i 's#<application#<uses-permission android:name="android.permission.RECORD_AUDIO" />\n    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />\n    <uses-permission android:name="android.permission.CAMERA" />\n    <application#' android/app/src/main/AndroidManifest.xml
@@ -139,4 +157,4 @@ jobs:
           cp android/app/build/outputs/apk/debug/app-debug.apk Maya.apk
           gh release create "v${{ github.run_number }}" Maya.apk \
             --title "Maya v${{ github.run_number }}" \
-            --notes "Maya V21: opt-in encrypted Private Vault with authenticated backup export/import, Advanced Panel and Memory V2. Old Maya retained."
+            --notes "Maya V22: opt-in Android screenshot with per-request consent, visible-transcript confirmation and launcher visibility. Old Maya retained."
