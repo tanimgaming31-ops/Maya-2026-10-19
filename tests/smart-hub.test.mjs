@@ -76,7 +76,8 @@ assert.ok((await api.runRoutine(api.getRoutine('study'),async()=>true)).includes
 assert.equal(clicks,1);
 const voice=readFileSync(new URL('../maya-features/life-voice.js',import.meta.url),'utf8');
 const loader=readFileSync(new URL('../maya-features/advanced-loader.js',import.meta.url),'utf8');
-assert.ok(voice.includes("return parseHubCommand(t);"),'Maya Life Voice is not connected to the Smart Hub parser');
+assert.ok(voice.includes("parseHubCommand(t)"),'Maya Life Voice is not connected to the Smart Hub parser');
+assert.ok(voice.includes("parseOpenAppCommand(t)"),'Android App Launcher parser must remain connected after Smart Hub');
 assert.ok(voice.includes("executeHubCommand(command,ask)"),'Smart Hub actions not connected to real V25 confirmation');
 assert.ok(loader.includes("import './smart-hub.js'"),'Smart Hub UI not loaded by Maya');
 console.log('Maya Smart Hub: routine safety, parsing, permission diagnostics, shared To-dos, voice integration tests passed (not phone hardware tests).');
