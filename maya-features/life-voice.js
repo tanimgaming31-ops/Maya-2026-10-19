@@ -16,6 +16,7 @@ export function parseLifeVoice(raw){
  if(/^(?:সপ্তাহের হিসাব বলো|সাপ্তাহিক সারাংশ বলো|এই সপ্তাহের হিসাব বলো|show weekly summary|weekly summary)$/iu.test(t))return {kind:'weekly'};
  if(/^(?:ফোকাস\s+(?:বন্ধ করো|বন্ধ|থামাও)|stop focus|cancel focus|stop focus timer)$/iu.test(t))return {kind:'stop'};
  if(/^(?:লাইফ সুইট খোলো|লাইফ স্যুট খোলো|open life suite|show life suite)$/iu.test(t))return {kind:'open'};
+ if(/^(?:এজেন্ট খোলো|এজেন্ট মোড খোলো|এজেন্ট প্যানেল খোলো|open agent|open agent mode|open agent suite|show agent suite)$/iu.test(t))return {kind:'agentOpen'};
  let m=t.match(/^(?:আমার\s+)?ডা(?:য়|য়)েরি(?:তে)?\s+(?:লিখো|লেখো|লিখে রাখো)\s*[:\-]?\s+(.+)$/u)||t.match(/^(?:write|save|add|record)\s+(?:to\s+)?(?:my\s+)?diary\s*[:\-]?\s+(.+)$/iu);
  if(m)return {kind:'diary',body:short(m[1],800)};
  m=t.match(/^(?:আজ(?:কে)?\s+)?(\d{1,9}(?:\.\d{1,2})?)\s*(দিরহাম|টাকা|ডলার|রুপি|ইউরো|aed|bdt|usd|inr|eur)\s+খরচ\s*(?:করেছি|করলাম|হয়েছে|হয়েছে)(?:\s+(?:জন্য|কারণে|for)\s+(.+))?$/iu)||t.match(/^(?:log|record|save|add)\s+(?:an?\s+)?expense\s+(?:of\s+)?(\d{1,9}(?:\.\d{1,2})?)\s*(aed|bdt|usd|inr|eur|dirham|taka|dollar|rupee|euro)(?:\s+(?:for|on)\s+(.+))?$/iu);
@@ -63,6 +64,10 @@ export async function runLifeVoice(command){
   let msg='';
   switch(command.kind){
    case 'appLaunch': msg=await openNamedApp(command.name);break;
+   case 'agentOpen':{
+    const btn=el('btnAgentSuite');if(!btn)return report('Agent Suite controls have not loaded.');
+    btn.click();msg='Opened Maya Agent Suite in Settings.';break;
+   }
    case 'hub':msg=await executeHubCommand(command,ask);break;
    case 'diary':
     if(command.body.length<3||secretLike(command.body))return report('Diary text is invalid or sensitive; not saved.');
