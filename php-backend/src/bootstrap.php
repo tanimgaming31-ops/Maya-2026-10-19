@@ -57,7 +57,7 @@ function maya_vault(callable $work): mixed {
             if (($env['v'] ?? null) !== 1) throw new RuntimeException('vault_version');
             $plain = openssl_decrypt(
                 base64_decode($env['data'], true), 'aes-256-gcm', $key,
-                base64_decode($env['iv'], true), OPENSSL_RAW_DATA,
+                OPENSSL_RAW_DATA, base64_decode($env['iv'], true),
                 base64_decode($env['tag'], true)
             );
             if ($plain === false) throw new RuntimeException('vault_decrypt_failed');
