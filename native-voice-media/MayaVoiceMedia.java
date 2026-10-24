@@ -214,7 +214,7 @@ public final class MayaVoiceMedia {
     public static boolean handleSpoken(Context context,String words){
         String s=words==null?"":words.trim().toLowerCase(Locale.ROOT)
             .replaceAll("[।!?]+$","").trim();
-        if(s.matches("^(?:(?:take|capture|save)(?: a| the| my)? screenshot|screenshot|স্ক্রিনশট(?: নাও| নিন| নেও| তোলো| তুলে দাও| নিয়ে দাও| নিয়ে দাও| সেভ করো)?|স্ক্রিনশট (?:নাও|তুলো|সেভ করো)|স্ক্রিনশট নিয়ে গ্যালারিতে সেভ করো)$")){
+        if(s.matches("^(?:(?:take|capture|save)(?: a| the| my)? screenshot|screenshot|স্ক্রিনশট(?: নাও| নিন| নেও| তোলো| তুলে দাও| নিয়ে দাও| নিয়ে দাও| সেভ করো| করো| করে দাও| দাও| তুলো| নিয়ে নাও| নিয়ে নাও)?|স্ক্রিনশট (?:নাও|তুলো|সেভ করো)|স্ক্রিনশট নিয়ে গ্যালারিতে সেভ করো|স্ক্রিনের ছবি (?:নাও|তোলো|তুলো|নিয়ে দাও|নিয়ে দাও))$")){
             screenshot(context);return true;
         }
         String title=null;
