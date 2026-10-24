@@ -30,7 +30,7 @@ for(const q of ['takeScreenshot(Display.DEFAULT_DISPLAY','MayaV4AccessService.ac
  'AccessibilityNodeInfo.ACTION_CLICK','"com.google.android.youtube"','CAPTURING.compareAndSet(false,true)',
  'getSharedPreferences(PREF,0).getBoolean(OPT_IN,false)']) assert.ok(screen.includes(q),q);
 const install=read('scripts/install-voice-media.py');
-for(const q of ['MayaV4Controls.java','MayaV4AccessService','android:canTakeScreenshot="true"',
+for(const q of ['MayaV4Controls.java','MayaVoiceMedia.handleSpoken','android:canTakeScreenshot="true"',
  'MayaVoiceMedia.handleSpoken(ctx, words)','public String mediaVoice(String action, String json)'])
  assert.ok(install.includes(q),q);
 const loader=read('maya-features/advanced-loader.js');
