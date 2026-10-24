@@ -1,3 +1,21 @@
+## V30: এক অ্যাপে Voice Agent
+Agent Suite V30 এখন আগের Maya Voice/Settings-এর সঙ্গেই যুক্ত। **এটি আলাদা APK বা আলাদা UI নয়।** আগের Life Voice সেটিং চালু করা থাকলে Maya-র মাইক্রোফোনে নিচের কমান্ডগুলো ব্যবহার করা যায়। কথার শুরুতে **Maya / মায়া / মায়া** বলবে:
+
+- “Maya research solar energy” / “মায়া, সৌরবিদ্যুৎ সম্পর্কে রিসার্চ করো” — ৩টি grounded research request
+- “Maya make a plan about Dubai transport” — AI দিয়ে অনুমোদিত ১–৪টি read-only ধাপের পরিকল্পনা
+- “Maya run plan” / “মায়া, প্ল্যান চালাও” — তৈরি পরিকল্পনার নিরাপদ read-only ধাপ চালানো
+- “Maya do compare electric vehicles” — read-only plan তৈরি করে চালানোর চেষ্টা
+- “Maya search google for NASA” / “মায়া, গুগলে আবহাওয়া সার্চ করো” — Google Search খোলার অনুরোধ
+- “Maya open app YouTube” অথবা আগের “মায়া, ইউটিউব খোলো” — Android-এর visible installed app খোলা
+- “Maya read my file” / “মায়া, আমার পিডিএফ পড়ো” — ফাইল নির্বাচনের নির্দেশ; বেছে নেওয়ার পরে অনুমতি নিয়ে Gemini-তে বিশ্লেষণ
+- “Maya check code” / “মায়া, কোডটা ঠিক করো” — আগে থেকে দেওয়া কোড বিশ্লেষণের চেষ্টা; সরাসরি GitHub পরিবর্তন করে না
+- “Maya show agent task history” — Agent Task Dashboard-এর সাম্প্রতিক কাজের তথ্য
+- “Maya stop agent” / “মায়া, এজেন্ট বন্ধ করো” — চলমান Agent কাজ বন্ধ করা
+
+**গুরুত্বপূর্ণ সীমা:** ভয়েস শনাক্তকরণ ও Gemini-এর কার্যকারিতা Android ফোনে পরীক্ষা করতে হবে। প্রতিটি অজানা বাক্যকে AI Agent command হিসেবে চালানো হয় না। ওয়েবসাইটে নিজে নিজে লগইন/ক্লিক, বার্তা পাঠানো, সব অ্যাপে স্বয়ংক্রিয় কাজ, background/always-on Agent এখনও নেই। Browser/Android অ্যাপ খুললে voice call interrupt হতে পারে। Gemini Live একই সঙ্গে নিজের উত্তর দিতে পারে—ভয়েস এবং status panel দুটোই পরীক্ষা করো।
+
+**শুধু ফোন দিয়ে চালু:** (১) মূল Maya খুলে আগের Settings → Life Voice toggle ON করো, (২) Settings → Gemini API Key → Test Key, (৩) মাইক্রোফোন দিয়ে উপরের কমান্ড দাও, (৪) ওপরে ⚡ Agent Suite-এ কাজের সত্যিকারের status দেখো। Android APK-র main screen-এ আলাদা Agent app তৈরি হয়নি। Microphone permission/voice engine কাজ না করলে Settings-এ typed command test দিয়ে যাচাই করো।
+
 # Maya Agent Suite V29 — Android / Phone-only Guide
 
 This is **Maya's own Agent Suite inspired by general AI-agent concepts**. It is **not Google Antigravity**, the Antigravity IDE, or an official integration with an Antigravity API. The main Maya app and existing memory packs, voice chat and avatar remain in place.
