@@ -197,7 +197,9 @@ public final class MayaVoiceMedia {
             }
             ContentValues publish=new ContentValues();publish.put(MediaStore.Images.Media.IS_PENDING,0);
             if(c.getContentResolver().update(saved,publish,null,null)<1)throw new IllegalStateException("Gallery did not publish screenshot");
-            if(!"capturing".equals(shotStatus))return;
+            if(!"capturing".equals(shotStatus)){
+                c.getContentResolver().delete(saved,null,null);saved=null;return;
+            }
             complete(c,"saved","Screenshot saved in Gallery → Pictures/Maya.",saved.toString());saved=null;
         }catch(Exception error){
             if(saved!=null)try{c.getContentResolver().delete(saved,null,null);}catch(Exception ignored){}
