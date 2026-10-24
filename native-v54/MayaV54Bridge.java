@@ -21,6 +21,8 @@ public final class MayaV54Bridge {
             JSONObject input=new JSONObject(data==null?"{}":data);
             if(action==null)return msg("error","Action is missing.");
             switch(action){
+              case "MACRO_TAP":return MayaV54Macro.start(ctx,input.optString("package",""),input.optString("activity",""),input.optString("label",""));
+              case "MACRO_STATUS":return MayaV54Macro.status();
               case "FILES_PICK":return MayaV54Files.choose(act);
               case "FILES_STATUS":return MayaV54Files.status(ctx);
               case "FILES_LIST":return MayaV54Files.list(ctx);
