@@ -187,7 +187,6 @@ public final class MayaVoiceMedia {
         try{
             Intent intent=new Intent(Intent.ACTION_VIEW,Uri.parse(url));
             intent.setPackage("com.google.android.youtube");intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-            if(intent.resolveActivity(c.getPackageManager())==null)return json("unavailable","Install or enable the official YouTube app; browser results cannot be auto-tapped.");
             cancelSearch();
             target=query;expires=SystemClock.elapsedRealtime()+30000;
             long request=videoRequestId;
