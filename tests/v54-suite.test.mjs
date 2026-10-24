@@ -10,6 +10,7 @@ const positives=[
  ['Maya list files','folderList'],
  ['Maya save file report.txt with hello there','fileSave'],
  ['Maya remind me in 10 minutes to drink water','reminder'],
+ ['মায়া, ১০ মিনিট পরে পানি খাও মনে করিয়ে দাও','reminder'],
  ['Maya remind me in 2 hours to call home','reminder'],
  ['Maya macro Calculator tap History','macro'],
  ['Maya run routine morning','routine'],
