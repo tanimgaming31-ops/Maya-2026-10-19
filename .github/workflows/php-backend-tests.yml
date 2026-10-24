@@ -1,0 +1,26 @@
+name: PHP Intelligence Backend tests
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'php-backend/**'
+      - '.github/workflows/php-backend-tests.yml'
+  push:
+    branches:
+      - feature/php-intelligence-backend-v1
+    paths:
+      - 'php-backend/**'
+      - '.github/workflows/php-backend-tests.yml'
+jobs:
+  php-tests:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          extensions: openssl
+      - name: Integration smoke tests
+        run: bash php-backend/tests/smoke.sh
