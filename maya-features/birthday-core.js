@@ -46,7 +46,7 @@ export function parseBirthdayQuestion(raw){
  if(!p)return null;
  const v=p[1].toLowerCase();
  if(/^(?:তোমার\s+জন্মদিন\s+কবে|তোমার\s+জন্ম\s+কবে|তুমি\s+কবে\s+জন্মেছিলে|তুমি\s+কবে\s+তৈরি\s+হয়েছ|তুমি\s+কবে\s+তৈরি\s+হয়েছ)$/u.test(v))return 'date';
- if(/^(?:তোমার\\s+জন্মদিন\\s+(?:কোনদিন|কোন\\s+দিন)|তোমার\\s+জন্মদিন\\s+কখন\\s+হয়েছিল|তোমার\\s+জন্মদিন\\s+কখন\\s+হয়েছিল)$/u.test(v))return 'date';
+ if(/^(?:তোমার\s+জন্মদিন\s+(?:কোনদিন|কোন\s+দিন)|তোমার\s+জন্মদিন\s+কখন\s+হয়েছিল|তোমার\s+জন্মদিন\s+কখন\s+হয়েছিল)$/u.test(v))return 'date';
  if(/^(?:when (?:were you born|was your birthday|were you created)|what(?:'s| is) your (?:birthday|birth date|creation date))$/iu.test(v))return 'date';
  if(/^(?:তোমার\s+জন্ম(?:ের)?\s+সময়\s+কত|তুমি\s+কত\s+বাজে\s+জন্মেছিলে|তোমার\s+জন্ম\s+কখন\s+হয়েছিল|তোমার\s+জন্ম\s+কখন\s+হয়েছিল|তুমি\s+কখন\s+তৈরি\s+হয়েছিলে|তুমি\s+কখন\s+তৈরি\s+হয়েছিলে|what time were you (?:born|created)|what(?:'s| is) your (?:birth|creation) time)$/iu.test(v))return 'time';
  if(/^(?:তোমার\s+বয়স\s+কত|তোমার\s+বয়স\s+কত|তোমার\s+বয়স\s+কতো|তোমার\s+বয়স\s+কতো|how old are you|what is your age)$/iu.test(v))return 'age';
