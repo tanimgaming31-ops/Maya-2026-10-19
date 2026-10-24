@@ -28,8 +28,16 @@ function show(text){
 }
 let busy=false;
 async function capture(){
- if(!enabled())return show('Enable Voice Screenshot in Maya Settings first.');
+ if(!enabled())return show('Enable Voice Screenshot in Maya Settings first. This switch is required before a spoken screenshot.');
  if(nativeAvailable()){
+  // Web and native consent can become desynchronized after an APK upgrade or
+  // restoring Settings. Explicitly synchronize the opted-in setting whenever
+  // the user requests a screenshot while the Maya UI is foreground.
+  const sync=native('SCREEN_ENABLE',{enabled:true});
+  if(sync.status!=='ok')return show('Screenshot setting was not accepted by Android: '+msg(sync));
+  const diag=native('SCREEN_DIAG');
+  if(diag.status==='ok'&&!diag.accessibilityConnected)return show('Maya Screen Controls is OFF. Android Settings → Accessibility → Maya Screen Controls → ON. Then retry.');
+  if(diag.status==='ok'&&!diag.screenshotCapability)return show('Android screenshot permission is missing even though Accessibility may be on. Turn Maya Screen Controls OFF and ON again, then retry.');
   let r=native('SCREEN_CAPTURE');
   if(r.status==='capturing'){
    show('Screenshot requested. Waiting for Gallery save result…');
@@ -48,6 +56,20 @@ async function capture(){
   const r=await requestScreenshot();
   return show(r.status==='capturing'?'Android capture started, not yet saved. Check Settings → Screenshot for Gallery result.':msg(r));
  }catch(e){return show('Screenshot unavailable: '+String(e.message||e));}
+}
+export function getScreenshotDiagnostics(){
+ if(!nativeAvailable())return {status:'unavailable',message:'Install the latest Maya Android APK, not the website.'};
+ return native('SCREEN_DIAG');
+}
+export function readableDiagnostics(r){
+ if(r.status!=='ok')return msg(r);
+ const fields=[
+  'Android SDK '+r.androidSdk,
+  'Voice screenshot: '+(r.voiceScreenshotOptIn?'enabled':'OFF'),
+  'Maya Accessibility: '+(r.accessibilityConnected?'connected':'OFF'),
+  'Android screenshot capability: '+(r.screenshotCapability?'YES':'NO')
+ ];
+ return fields.join(' · ')+'. '+(r.message||'');
 }
 async function play(query){
  const q=String(query||'').trim();
@@ -77,6 +99,8 @@ function mount(){
  '<p class="note">Screenshots use Android Accessibility only after you opt in and grant Screen Controls. Each spoken command captures one visible screen; saved locally to Gallery → Pictures/Maya. Secure screens stay protected.</p>',
  '<label><input id="mayaVoiceScreenshotEnable" type="checkbox"> Enable one-command voice screenshot</label>',
  '<div class="krow"><button class="btn" id="mayaMediaAccess">Enable Maya Accessibility</button><button class="btn" id="mayaMediaCapture">Screenshot now</button><button class="btn" id="mayaMediaStatus">Check Gallery save</button></div>',
+ '<button class="btn" id="mayaMediaDiag">Diagnose Android Screenshot Permissions</button>',
+ '<p class="note">If screenshot permission is NO even after enabling Accessibility, switch Maya Screen Controls OFF then ON again in Android Settings. Do not turn on Accessibility for unknown apps.</p>',
  '<p class="note">Say “Maya take a screenshot” or “মায়া স্ক্রিনশট নাও”. Android 11+ needed for direct Accessibility capture; older Android uses the existing permission-based screenshot button.</p>',
  '<h4>▶ YouTube: find and tap matching video</h4>',
  '<input id="mayaMediaVideo" class="inp" maxlength="150" placeholder="Exact YouTube video title">',
@@ -100,6 +124,7 @@ function mount(){
  $('mayaMediaAccess').onclick=()=>{try{show(msg(native('ACCESS_SETTINGS')));}catch(e){show(e.message);}};
  $('mayaMediaCapture').onclick=()=>void runMediaCommand({kind:'screenshot'});
  $('mayaMediaStatus').onclick=()=>{try{const r=native('SCREEN_STATUS');show(r.status==='saved'?'Screenshot saved to Gallery → Pictures/Maya.':msg(r));}catch(e){show(e.message);}};
+ $('mayaMediaDiag').onclick=()=>{try{show(readableDiagnostics(getScreenshotDiagnostics()));}catch(e){show('Screenshot diagnostics error: '+e.message);}};
  $('mayaMediaPlay').onclick=()=>void runMediaCommand({kind:'video',query:$('mayaMediaVideo').value});
  $('mayaMediaPlayStatus').onclick=()=>{try{show(msg(native('VIDEO_STATUS')));}catch(e){show(e.message);}};
 }
