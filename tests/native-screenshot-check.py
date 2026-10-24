@@ -16,6 +16,7 @@ assert 'registerPlugin(MayaScreenshot.class);' in i
 assert 'android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION' in i
 assert "'android.intent.category.LAUNCHER'" in q
 assert "android.permission.QUERY_ALL_PACKAGES" not in q
-assert 'Confirm screenshot' in v and '30000' in v
-assert 'typeof document' in v
+assert 'isScreenshotCommand' in v and 'maya_voice_screenshot_enabled' in v
+assert "মায়া" in v and "Gallery" in Path('maya-features/voice-media.js').read_text(encoding='utf-8')
+assert 'typeof document' in Path('maya-features/voice-media.js').read_text(encoding='utf-8')
 print('Native screenshot: consent, saving, launcher and plugin static checks passed.');
