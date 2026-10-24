@@ -13,7 +13,7 @@ export function parseAgentVoice(input){
  if(/^(?:run|execute|start)\s+(?:(?:my|the|saved|current)\s+)?(?:agent\s+)?plan$|^(?:প্ল্যান|পরিকল্পনা)\s+(?:চালাও|চালু করো|শুরু করো|এক্সিকিউট করো)$/iu.test(cmd))return {kind:'runPlan'};
  if(/^(?:choose|select|read|analy[sz]e|summari[sz]e|explain)\s+(?:my\s+)?(?:selected\s+)?(?:pdf|file|document|photo|image)(?:\s+(?:file|please))?$|^(?:আমার\s+)?(?:পিডিএফ|পিডিএফটা|ফাইল|ডকুমেন্ট|ছবি)\s+(?:পড়ো|পড়ে শোনাও|বিশ্লেষণ করো|বুঝিয়ে দাও|দেখো)$/iu.test(cmd))return {kind:'file'};
  let v=cmd.match(/^(?:deep\s+research|research|investigate|find\s+out|look\s+up)\s+(?:about\s+|on\s+|for\s+)?(.+)$/iu)
-   ||cmd.match(/^(.+?)\s+(?:নিয়ে|সম্পর্কে|বিষয়ে|বিষয়ে)\s+(?:ডিপ\s+)?(?:রিসার্চ করো|গবেষণা করো|তথ্য খুঁজে দাও)$/u)
+   ||cmd.match(/^(.+?)\s+(?:নিয়ে|নিয়ে|সম্পর্কে|বিষয়ে|বিষয়ে)\s+(?:ডিপ\s+)?(?:রিসার্চ করো|গবেষণা করো|তথ্য খুঁজে দাও)$/u)
    ||cmd.match(/^(.+?)\s+(?:খবর|তথ্য)\s+(?:খুঁজে দাও|বের করো)$/u);
  if(v&&limit(v[1],160).length>=3)return {kind:'research',topic:limit(v[1],160)};
  v=cmd.match(/^(?:make|create|prepare|build)\s+(?:an?\s+)?(?:ai\s+|agent\s+|research\s+)?plan\s+(?:for|about|on)\s+(.+)$/iu)

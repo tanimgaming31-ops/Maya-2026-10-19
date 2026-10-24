@@ -112,6 +112,7 @@ jobs:
           node tests/agent-voice.test.mjs
           node tests/agent-suite.test.mjs
           node tests/app-launcher.test.mjs
+          node tests/voice-system-audit.mjs
           python3 tests/app-launcher-native-check.py
           python3 tests/life-native-check.py
           node tests/voice-screenshot.test.cjs
