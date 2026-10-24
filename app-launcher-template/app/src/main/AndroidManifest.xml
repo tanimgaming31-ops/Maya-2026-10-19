@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- ভয়েস ইনপুটের জন্য -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+
+    <!-- API 33+ এ নোটিফিকেশন দেখাতে (ব্যাকগ্রাউন্ড লঞ্চ-রিকোয়েস্ট ফ্লো) -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <!--
+      প্যাকেজ ভিজিবিলিটি (Android 11+ / API 30+):
+      এই <queries> ঘোষণা বলে দেয় "যেসব অ্যাপের লঞ্চার অ্যাক্টিভিটি আছে, তাদের
+      আমি দেখতে চাই"। এতে অ্যাসিস্ট্যান্টের যথেষ্ট প্রয়োজন মেটে যায়।
+
+      QUERY_ALL_PACKAGES শুধু ব্যতিক্রমী ক্ষেত্রে — Play এ অনুমোদন লাগে:
+      <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" />
+    -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
+        </intent>
+        <!-- SpeechRecognizer ব্যবহারের জন্য: রিকগনিশন সার্ভিস খুঁজে পেতে (API 30+) -->
+        <intent>
+            <action android:name="android.speech.RecognitionService" />
+        </intent>
+    </queries>
+
+    <application
+        android:allowBackup="true"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.AppCompat.DayNight">
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:launchMode="singleTop">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!--
+          ঐচ্ছিক AccessibilityService মডিউল।
+          BIND_ACCESSIBILITY_SERVICE পারমিশন নিশ্চিত করে যে সার্ভিসটি শুধু
+          সিস্টেমই বাইন্ড করতে পারবে।
+        -->
+        <service
+            android:name=".MayaAccessibilityService"
+            android:exported="true"
+            android:label="@string/maya_a11y_label"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/maya_accessibility_service_config" />
+        </service>
+    </application>
+
+</manifest>

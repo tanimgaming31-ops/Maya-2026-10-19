@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  সতর্কতা (Google Play নীতি):
+  isAccessibilityTool="true" শুধুমাত্র প্রতিবন্ধী ব্যবহারকারীদের সহায়তার জন্য
+  ডিজাইন করা সার্ভিসেই ব্যবহার করা যায়। Maya সাধারণ অ্যাসিস্ট্যান্ট হলে
+  "false" রাখুন, Play Console-এ Accessibility API ঘোষণাপত্র পূরণ করুন এবং
+  অ্যাপের ভেতরে স্পষ্ট ডিসক্লোজার + সম্মতি নিন।
+-->
+<accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
+    android:accessibilityEventTypes="typeWindowStateChanged|typeWindowContentChanged"
+    android:accessibilityFeedbackType="feedbackGeneric"
+    android:accessibilityFlags="flagIncludeNotImportantViews|flagReportViewIds"
+    android:canRetrieveWindowContent="true"
+    android:isAccessibilityTool="false"
+    android:notificationTimeout="100"
+    android:description="@string/maya_a11y_description" />

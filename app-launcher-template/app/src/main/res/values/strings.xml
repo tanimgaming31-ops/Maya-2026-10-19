@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Maya Launcher</string>
+    <string name="app_name_hint">অ্যাপের নাম লিখুন (যেমন YouTube)</string>
+    <string name="open_button">খুলুন</string>
+    <string name="mic_button">মাইক দিয়ে বলুন</string>
+    <string name="maya_a11y_label">Maya — অ্যাপ কন্ট্রোল</string>
+    <string name="maya_a11y_description">লঞ্চ করা অ্যাপের ভেতরের নির্দিষ্ট বাটন বা উপাদানে ট্যাপ করার জন্য Maya-কে সাহায্য করে। এটি চালু থাকলে Maya স্ক্রিনের দৃশ্যমান কনটেন্ট পড়তে পারে।</string>
+</resources>
