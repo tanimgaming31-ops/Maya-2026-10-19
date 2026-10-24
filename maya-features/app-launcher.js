@@ -139,7 +139,7 @@ export async function openNamedApp(name){
   const apps=installedApps(),found=rankedMatches(name,apps);
   if(!found.length){
    const close=suggestAppMatches(name,apps);
-   if(close.length)return await choose(close,'No exact match for "'+String(name).slice(0,80)+'". Did you mean one of these? Tap to open — no app opens until you select.');
+   if(close.length)return await choose(close,'নামটা হুবহু মেলেনি: "'+String(name).slice(0,80)+'"। এইটা কি বুঝিয়েছ? খুলতে নামে ট্যাপ করো — ট্যাপ না করা পর্যন্ত কোনো অ্যাপ খোলবে না।');
    return 'No visible installed app named "'+String(name).slice(0,80)+'". Check spelling or the Installed Apps list in Maya Settings.';
   }
   if(found[0].score===120&&(found.length===1||found[1].score<120))return nativeOpen(found[0]);
