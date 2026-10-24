@@ -14,7 +14,7 @@ export function parseV54Voice(raw){
  m=cmd.match(/^remind\s+me\s+in\s+(\d{1,4})\s+(minutes?|hours?)\s+to\s+(.+)$/iu);
  if(m){const minutes=Number(m[1])*(m[2].toLowerCase().startsWith('hour')?60:1);
   if(minutes>=1&&minutes<=525600&&m[3].length<=120)return {kind:'reminder',minutes,title:m[3]};return null;}
- m=cmd.match(/^(\d{1,4})\s+মিনিট\s+পরে\s+(.+?)\s+মনে\s+করিয়ে\s+দাও$/u);
+ m=cmd.match(/^(\d{1,4})\s+মিনিট\s+পরে\s+(.+?)\s+মনে\s+কর(?:িয়ে|িয়ে)\s+দাও$/u);
  if(m&&Number(m[1])>=1&&Number(m[1])<=525600&&m[2].length<=120)return {kind:'reminder',minutes:Number(m[1]),title:m[2]};
  m=cmd.match(/^(?:macro|app macro)\s+(.+?)\s+tap\s+(.+)$/iu);
  if(m&&m[1].length<=100&&m[2].length<=48&&!/(send|delete|purchase|pay|checkout|confirm|submit|password|install|allow|otp|transfer|buy|remove|reset|uninstall|authorize|permission|security|payment|verify|login|sign in|পাঠা|মুছ|ডিলিট|কিন|পেমেন্ট|অনুমতি)/iu.test(m[2]))return {kind:'macro',app:m[1],label:m[2]};
