@@ -40,6 +40,16 @@ replacement="""        if ("V4_PLAY_SEARCH".equals(action)) {
         }
 """
 s=s[:a]+replacement+s[b:]
+prefix_line="        String all = phrase.trim().toLowerCase(Locale.ROOT);"
+fix_prefix='''        for (String prefix : new String[]{"maya","মায়া","মায়া","মাইয়া","মাইয়া"}) {
+            if (all.startsWith(prefix + ",") || all.startsWith(prefix + ":")) {
+                all = prefix + " " + all.substring(prefix.length() + 1).trim();
+                break;
+            }
+        }
+'''
+if s.count(prefix_line)!=1:raise SystemExit("Android native voice wake phrase anchor changed")
+s=s.replace(prefix_line,prefix_line+"\n"+fix_prefix,1)
 anchor="        String words = all.substring(wake.length()).trim();"
 line=anchor+'\n        if (MayaVoiceMedia.handleSpoken(ctx, words)) return;'
 if line not in s:
