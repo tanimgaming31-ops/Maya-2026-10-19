@@ -57,6 +57,24 @@ async function capture(){
   return show(r.status==='capturing'?'Android capture started, not yet saved. Check Settings → Screenshot for Gallery result.':msg(r));
  }catch(e){return show('Screenshot unavailable: '+String(e.message||e));}
 }
+async function consentScreenshot(){
+ // This fallback intentionally requires a visible button press and Android's
+ // screen-sharing system approval for EACH capture.
+ try{
+  const request=await requestScreenshot();
+  if(request.status!=='capturing')return show(msg(request));
+  show('Android screen-sharing consent approved; checking Gallery save…');
+  if(typeof window?.Capacitor?.registerPlugin!=='function')return show('Check the original Screenshot panel for final Gallery status.');
+  const screenshotPlugin=window.Capacitor.registerPlugin('MayaScreenshot');
+  for(let i=0;i<24;i++){
+   await new Promise(ok=>setTimeout(ok,550));
+   const state=await screenshotPlugin.status();
+   if(state.status==='saved')return show('Confirmed: permission-based screenshot saved in Gallery → Pictures/Maya.');
+   if(!['capturing'].includes(state.status))return show('Android consent capture status: '+msg(state));
+  }
+  return show('Screen-sharing capture still pending. Open the original Screenshot panel for its status.');
+ }catch(e){return show('Android capture prompt failed: '+String(e.message||e));}
+}
 export function getScreenshotDiagnostics(){
  if(!nativeAvailable())return {status:'unavailable',message:'Install the latest Maya Android APK, not the website.'};
  return native('SCREEN_DIAG');
@@ -100,6 +118,8 @@ function mount(){
  '<label><input id="mayaVoiceScreenshotEnable" type="checkbox"> Enable one-command voice screenshot</label>',
  '<div class="krow"><button class="btn" id="mayaMediaAccess">Enable Maya Accessibility</button><button class="btn" id="mayaMediaCapture">Screenshot now</button><button class="btn" id="mayaMediaStatus">Check Gallery save</button></div>',
  '<button class="btn" id="mayaMediaDiag">Diagnose Android Screenshot Permissions</button>',
+ '<div class="krow"><button class="btn" id="mayaMediaConsent">Fallback: Android screen-sharing permission prompt</button></div>',
+ '<p class="note">Fallback needs you to approve Android Screen Sharing each time. Use it when Android Accessibility screenshot is blocked or unavailable. Protected content cannot be captured.</p>',
  '<p class="note">If screenshot permission is NO even after enabling Accessibility, switch Maya Screen Controls OFF then ON again in Android Settings. Do not turn on Accessibility for unknown apps.</p>',
  '<p class="note">Say “Maya take a screenshot” or “মায়া স্ক্রিনশট নাও”. Android 11+ needed for direct Accessibility capture; older Android uses the existing permission-based screenshot button.</p>',
  '<h4>▶ YouTube: find and tap matching video</h4>',
@@ -125,6 +145,7 @@ function mount(){
  $('mayaMediaCapture').onclick=()=>void runMediaCommand({kind:'screenshot'});
  $('mayaMediaStatus').onclick=()=>{try{const r=native('SCREEN_STATUS');show(r.status==='saved'?'Screenshot saved to Gallery → Pictures/Maya.':msg(r));}catch(e){show(e.message);}};
  $('mayaMediaDiag').onclick=()=>{try{show(readableDiagnostics(getScreenshotDiagnostics()));}catch(e){show('Screenshot diagnostics error: '+e.message);}};
+ $('mayaMediaConsent').onclick=()=>void consentScreenshot();
  $('mayaMediaPlay').onclick=()=>void runMediaCommand({kind:'video',query:$('mayaMediaVideo').value});
  $('mayaMediaPlayStatus').onclick=()=>{try{show(msg(native('VIDEO_STATUS')));}catch(e){show(e.message);}};
 }
