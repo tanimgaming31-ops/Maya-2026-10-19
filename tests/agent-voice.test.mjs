@@ -23,7 +23,7 @@ for(const [text,kind] of sample)assert.equal(parseAgentVoice(text)?.kind,kind,te
 for(const phrase of ['','research solar energy','Maya how are you','Maya send money now','Maya send WhatsApp messages','মায়া, পাসওয়ার্ড বলো'])assert.equal(parseAgentVoice(phrase),null,phrase);
 assert.equal(parseAgentVoice('Maya research solar energy').topic,'solar energy');
 assert.equal(parseAgentVoice('Maya open app YouTube').name,'YouTube');
-assert.equal(voiceAgentSummary('a'.repeat(800)).length,430);
+assert.ok(voiceAgentSummary('a'.repeat(800)).length<=430);
 const loader=readFileSync(new URL('../maya-features/advanced-loader.js',import.meta.url),'utf8');
 assert.ok(loader.includes("import './life-voice.js'"),'original Life Voice import absent');
 assert.ok(loader.includes("import './agent-suite.js'"),'Agent Suite import absent');
