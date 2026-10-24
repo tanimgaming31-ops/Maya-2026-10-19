@@ -9,6 +9,7 @@ const {parseMediaCommand,isScreenshotCommand}=new Function(combined)();
 for(const t of [
  'Maya take a screenshot','মায়া স্ক্রিনশট নাও',
  'মায়া স্ক্রিনশট নিয়ে গ্যালারিতে সেভ করো','মায়া স্ক্রিনশট তোলো',
+ 'মায়া স্ক্রিনশট করো','মায়া স্ক্রিনশট করে দাও','মায়া স্ক্রিনের ছবি তোলো',
 ])assert.deepEqual(parseMediaCommand(t),{kind:'screenshot'},t);
 for(const [speech,title] of [
  ['Maya play YouTube Bengali relaxing music','Bengali relaxing music'],
@@ -22,13 +23,17 @@ for(const speech of ['screenshot secretly','Maya send bank money','YouTube play 
 }
 assert.ok(parser.includes("if(r.status==='saved')return show('Screenshot saved"));
 assert.ok(parser.includes("native('SCREEN_CAPTURE')"));
+assert.ok(parser.includes("native('SCREEN_DIAG')"));
+assert.ok(parser.includes("native('SCREEN_ENABLE',{enabled:true})"));
+assert.ok(parser.includes('Diagnose Android Screenshot Permissions'));
 assert.ok(parser.includes("native('VIDEO_SEARCH'"));
 const screen=read('native-voice-media/MayaVoiceMedia.java');
 for(const q of ['takeScreenshot(Display.DEFAULT_DISPLAY','MayaV4AccessService.active',
  'MediaStore.Images.Media.RELATIVE_PATH','Pictures/Maya','Bitmap.wrapHardwareBuffer',
  'MediaStore.Images.Media.IS_PENDING','android.graphics.Bitmap', 'videoStatus="pending"',
  'AccessibilityNodeInfo.ACTION_CLICK','"com.google.android.youtube"','CAPTURING.compareAndSet(false,true)',
- 'getSharedPreferences(PREF,0).getBoolean(OPT_IN,false)']) assert.ok(screen.includes(q),q);
+ 'getSharedPreferences(PREF,0).getBoolean(OPT_IN,false)',
+ 'SCREEN_DIAG','CAPABILITY_CAN_TAKE_SCREENSHOT','ERROR_TAKE_SCREENSHOT_NO_ACCESSIBILITY_ACCESS']) assert.ok(screen.includes(q),q);
 const install=read('scripts/install-voice-media.py');
 for(const q of ['MayaV4Controls.java','MayaVoiceMedia.handleSpoken','android:canTakeScreenshot="true"',
  'MayaVoiceMedia.handleSpoken(ctx, words)','public String mediaVoice(String action, String json)'])
