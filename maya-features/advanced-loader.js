@@ -9,6 +9,9 @@ import './app-launcher.js';
 import './life-voice.js';
 import './agent-suite.js';
 import './agent-voice-bridge.js';
+import './v54-voice.js';
+import './v54-suite.js';
+import './v54-voice-bridge.js';
 function init(){
   const host=document.querySelector('#setSheet .body');
   if(!host||document.getElementById('mayaAdvancedLink'))return;
