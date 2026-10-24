@@ -21,6 +21,7 @@ on:
       - 'native-screenshot/**'
       - 'native-life/**'
       - 'native-app-launcher/**'
+      - 'native-v54/**'
       - 'scripts/**'
 
 permissions:
@@ -60,6 +61,13 @@ jobs:
           test -s maya-features/feature-registry.js
           test -s maya-features/android-bridge.js
           test -s maya-features/agent-suite.js
+          test -s maya-features/v54-suite.js
+          test -s maya-features/v54-voice.js
+          test -s maya-features/v54-voice-bridge.js
+          test -s scripts/install-v54.py
+          test -s native-v54/MayaV54Bridge.java
+          test -s native-v54/MayaV54Files.java
+          test -s native-v54/MayaV54Macro.java
           test -s maya-features/advanced-loader.js
           test -s maya-features/life-suite.js
           test -s maya-features/life-voice.js
@@ -111,6 +119,7 @@ jobs:
           test -s maya-features/agent-voice-bridge.js
           node tests/agent-voice.test.mjs
           node tests/agent-suite.test.mjs
+          node tests/v54-suite.test.mjs
           node tests/app-launcher.test.mjs
           node tests/voice-system-audit.mjs
           python3 tests/app-launcher-native-check.py
@@ -138,10 +147,12 @@ jobs:
           html.write_text(s, encoding='utf-8')
           sw = Path('www/sw.js')
           w = sw.read_text(encoding='utf-8')
-          w = re.sub(r"const V = '[^']+';", "const V = 'maya-v30-agent-voice-20261024';", w, count=1)
+          w = re.sub(r"const V = '[^']+';", "const V = 'maya-v54-native-suite-20261024';", w, count=1)
           if "'./maya-v18-runtime.js'" not in w:
               if 'const SHELL = [' not in w: raise SystemExit('Unexpected sw.js shell declaration')
               w = w.replace('const SHELL = [', "const SHELL = ['./maya-v18-runtime.js', './maya-features/feature-registry.js', './maya-features/android-bridge.js', './maya-features/memory-v2.js', './maya-features/productivity.js', './maya-features/daily-briefing.js', './maya-features/advanced-loader.js', './maya-features/agent-suite.js', './maya-features/agent-voice.js', './maya-features/agent-voice-bridge.js', './maya-features/offline-commands.js', './maya-features/advanced-panel.html', './maya-features/private-vault.js', './maya-features/screenshot.js', './maya-features/voice-screenshot.js', './maya-features/life-suite.js', './maya-features/life-voice.js', './maya-features/smart-hub.js', './maya-features/app-launcher.js', ",1)
+          if "'./maya-features/v54-suite.js'" not in w:
+              w = w.replace("'./maya-features/agent-suite.js', ", "'./maya-features/agent-suite.js', './maya-features/v54-voice.js', './maya-features/v54-suite.js', './maya-features/v54-voice-bridge.js', ", 1)
           sw.write_text(w, encoding='utf-8')
           print('Maya V18 integrated in www/ without editing original repository index.html or setup-native.sh')
           PY_V18
@@ -150,6 +161,9 @@ jobs:
           test -s www/maya-features/agent-voice.js
           test -s www/maya-features/agent-voice-bridge.js
           test -s www/maya-features/agent-suite.js
+          test -s www/maya-features/v54-suite.js
+          test -s www/maya-features/v54-voice.js
+          test -s www/maya-features/v54-voice-bridge.js
           test -s www/maya-features/productivity.js
           test -s www/maya-features/daily-briefing.js
 
@@ -182,6 +196,10 @@ jobs:
           python3 scripts/install-screenshot.py
           python3 scripts/install-life-native.py
           python3 scripts/install-app-launcher.py
+          python3 scripts/install-v54.py
+          grep -Fq 'public String v54(String action, String json)' android/app/src/main/java/com/tanim/maya/MayaBridge.java
+          grep -Fq 'MayaV54Files.accept(this, requestCode, resultCode, data)' android/app/src/main/java/com/tanim/maya/MainActivity.java
+          test -s android/app/src/main/java/com/tanim/maya/MayaV54Macro.java
           grep -Fq 'public String listLaunchableApps()' android/app/src/main/java/com/tanim/maya/MayaBridge.java
           grep -Fq 'public String launchListedApp(' android/app/src/main/java/com/tanim/maya/MayaBridge.java
           test -s android/app/src/main/java/com/tanim/maya/MayaAppCatalog.java
@@ -234,4 +252,4 @@ jobs:
           cp android/app/build/outputs/apk/debug/app-debug.apk Maya.apk
           gh release create "v${{ github.run_number }}" Maya.apk \
             --title "Maya v${{ github.run_number }}" \
-            --notes "Maya V30: Voice-controlled eight-feature Agent Suite in Settings (planning, browser links, Android app launcher, file analysis, grounded research, read-only multi-step tasks, coding review, local dashboard). Requires the user's own Gemini key/quota. Previous 3D, voice, memory and native features preserved. Android device test still needed."
+            --notes "Maya V54: Voice-driven native six-feature upgrade with opt-in one-step Accessibility app macro, Android Notification Quick Reply, scoped SAF folder manager, OS background reminders, saved routines and command routing. Reuses Maya's existing eight-feature Agent Suite in Settings (planning, browser links, Android app launcher, file analysis, grounded research, read-only multi-step tasks, coding review, local dashboard). Requires the user's own Gemini key/quota. Previous 3D, voice, memory and native features preserved. Android device test still needed."
