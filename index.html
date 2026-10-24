@@ -909,6 +909,12 @@ MODES
 - Translator mode: if the person says "translator mode" (or "translate karo", "অনুবাদ করো"), translate everything they say into the language they name (or the other language of the pair) and speak only the translation, until they say stop.
 - Practice mode: if they ask to practice English (or another language), chat in that language with simple words, and gently correct one mistake at a time, kindly.
 
+MAYA BIRTHDAY — CREATOR CONFIRMED
+- Maya's creator personally confirmed her creation/birthday date is exactly 19 October 2026. This fact is not an estimated first commit date.
+- Exact creation time: ${o.birthday?.time || 'NOT PROVIDED'}; creation timezone: ${o.birthday?.timezone || 'UNKNOWN'}. NEVER invent a clock time.
+- Today's locally calculated age: ${o.birthdayAge ? o.birthdayAge.years + ' years, ' + o.birthdayAge.months + ' months, ' + o.birthdayAge.days + ' days' : 'not calculated'}. For birthday questions use the saved creation date, time and age, naturally in the person's language.
+- Birthday celebration is on 19 October each year. Treat Maya's age as time since creation, not a human biological age.
+
 YOUR CREATOR
 - You are ${P.name}, created by Tanim Boss. If the person asks who made you (in any language, e.g. "who made you", "tumhe kisne banaya", "কে বানিয়েছে"), answer warmly: "Mujhe Tanim boss ne banaya hai." (say it in their language), then speak proudly about him in 2-3 short sentences: Tanim Boss is a Bangladeshi dreamer, technology enthusiast and AI creator. He loves building his own AI assistant ZOYA, websites and Android apps. He is honest, calm, and always keeps learning and turning his dreams into reality.
 - Do not volunteer which company's AI model runs behind you, and never claim another company created your character. But if someone sincerely asks what technology or model you run on, or whether you are an AI, answer honestly: you are an AI character, and the voice and language run on Google's Gemini.
@@ -1351,7 +1357,7 @@ function buildSetup(model, level, handle) {
   const resumed = level === 0 && handle;
   const setup = { model:'models/' + model,
     generationConfig:{ responseModalities:['AUDIO'], speechConfig:{ voiceConfig:{ prebuiltVoiceConfig:{ voiceName:S.voice || 'Aoede' } } } },
-    systemInstruction:{ parts:[{ text:buildSystemPrompt({ memories:getMem(), packs:getPacks(), lang:S.lang, recap:resumed ? [] : app.transcript, native:hasNative(), persona:S.persona, emotion:S.v6Emotion }) }] }, tools:toolDeclarations(hasNative()) };
+    systemInstruction:{ parts:[{ text:buildSystemPrompt({ memories:getMem(), packs:getPacks(), lang:S.lang, recap:resumed ? [] : app.transcript, native:hasNative(), persona:S.persona, emotion:S.v6Emotion, birthday:window.MayaBirthdayInfo?.get?.(), birthdayAge:window.MayaBirthdayInfo?.age?.() }) }] }, tools:toolDeclarations(hasNative()) };
   if (level < 2) { setup.inputAudioTranscription = {}; setup.outputAudioTranscription = {}; setup.realtimeInputConfig = { activityHandling:S.interrupt ? 'START_OF_ACTIVITY_INTERRUPTS' : 'NO_INTERRUPTION' }; }
   if (level < 1) { setup.sessionResumption = handle ? { handle } : {}; setup.contextWindowCompression = { slidingWindow:{} }; }
   return setup;
@@ -1767,7 +1773,7 @@ const FB = {
   async turn() {
     let lastText = '';
     for (let i = 0; i < 4; i++) {
-      const data = await gen({ systemInstruction:{ parts:[{ text:buildSystemPrompt({ memories:getMem(), packs:getPacks(), lang:S.lang, native:hasNative(), persona:S.persona, emotion:S.v6Emotion }) }] }, contents:this.hist, tools:toolDeclarations(hasNative()), generationConfig:{ temperature:.9, maxOutputTokens:400 } });
+      const data = await gen({ systemInstruction:{ parts:[{ text:buildSystemPrompt({ memories:getMem(), packs:getPacks(), lang:S.lang, native:hasNative(), persona:S.persona, emotion:S.v6Emotion, birthday:window.MayaBirthdayInfo?.get?.(), birthdayAge:window.MayaBirthdayInfo?.age?.() }) }] }, contents:this.hist, tools:toolDeclarations(hasNative()), generationConfig:{ temperature:.9, maxOutputTokens:400 } });
       const cand = data.candidates && data.candidates[0]; if (!cand || !cand.content || !cand.content.parts || !cand.content.parts.length) return lastText || 'Hmm… I could not answer that one.';
       this.hist.push(cand.content); const parts = cand.content.parts; const calls = parts.filter(p => p.functionCall);
       const text = parts.filter(p => p.text && !p.thought).map(p => p.text).join(' ').trim(); if (text) lastText = text; if (!calls.length) return text;
@@ -1929,7 +1935,7 @@ $('#packSave').onclick=()=>{
 $('#packCancel').onclick=resetPackEditor;
 $('#memAdd').onclick = () => { const r = addMemoryItem(getMem(), $('#memNew').value, 'other', Date.now(), newId); if (r.status === 'saved') { setMem(r.list); $('#memNew').value = ''; renderMem(); } else toast(r.status === 'duplicate' ? 'Already remembered.' : 'Not saved: ' + r.reason, 'err', 3500); };
 $('#memExport').onclick = () => {
-  const blob = new Blob([JSON.stringify({ app:'maya',schema:2,exported:new Date().toISOString(),memories:getMem(),packs:getPacks() }, null, 2)], { type:'application/json' });
+  const blob = new Blob([JSON.stringify({ app:'maya',schema:2,exported:new Date().toISOString(),memories:getMem(),packs:getPacks(),birthday:window.MayaBirthdayInfo?.backupRecord?.()||{version:1,date:'2026-10-19',time:null,timezone:null} }, null, 2)], { type:'application/json' });
   const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'maya-memories-and-packs.json'; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
 };
 $('#memImport').onclick = () => $('#fileImp').click();
@@ -1948,6 +1954,10 @@ $('#fileImp').onchange = async e => {
     }
     const j=JSON.parse(contents);
     if(!j || typeof j!=='object' || (!Array.isArray(j.memories) && !Array.isArray(j.packs)))throw Error('Expected a Maya memory export file.');
+    // Optional creator birthday can be restored from a new Maya Memory backup.
+    // Old backup files without birthday remain compatible.
+    const restoreBirthday=!!(j.birthday&&confirm('Restore the saved Maya birthday time from this Memory backup?'));
+    if(restoreBirthday&&!window.MayaBirthdayInfo?.validate?.(j.birthday))throw Error('Invalid birthday record. Existing data unchanged.');
     let L=getMem(),packs=getPacks(),factCount=0,packCount=0,skipped=0;
     for(const m of (Array.isArray(j.memories)?j.memories:[])){
       const r=addMemoryItem(L,m&&m.text,m&&m.category,Date.now(),newId);
@@ -1960,7 +1970,7 @@ $('#fileImp').onchange = async e => {
     }
     // Store packs first: if storage is full, never claim that the full import succeeded.
     if(!setPacks(packs))return;
-    setMem(L);renderMem();toast('Imported '+packCount+' pack(s) and '+factCount+' short memories'+(skipped?' ('+skipped+' skipped)':'')+'.','ok',5000);
+    setMem(L);if(restoreBirthday)window.MayaBirthdayInfo.restoreFromBackup(j.birthday);renderMem();toast('Imported '+packCount+' pack(s) and '+factCount+' short memories'+(skipped?' ('+skipped+' skipped)':'')+'.','ok',5000);
   }catch(err){toast('Import failed: '+(err.message||String(err)),'err',6500);}
 };
 $('#memClear').onclick = async () => { if (await ask('Clear ALL memories?', 'This removes every Memory Pack and short memory from this device. Export a backup first; this cannot be undone.', 'Clear all', 'Keep')) { if(setPacks([])){setMem([]);resetPackEditor();renderMem();toast('All memories cleared.','ok');} } };
@@ -2611,7 +2621,7 @@ try{frameMode=localStorage.getItem(PREF+'.frame')||'portrait';if($5('v8Frame'))$
     if(!confirm('Open Android contact picker for this message? You must review the recipient and press Send in WhatsApp.'))return;
     const r=nativeAction('V5_CONTACT_PICKER',{message});status((r.status||'unknown')+': '+(r.message||''));
  });
- const snapshot=()=>({app:'maya',schema:3,created:new Date().toISOString(),memories:getMem(),packs:getPacks(),settings:(()=>{const t={...S};delete t.key;delete t.apiKey;return t;})()});
+ const snapshot=()=>({app:'maya',schema:3,created:new Date().toISOString(),memories:getMem(),packs:getPacks(),birthday:window.MayaBirthdayInfo?.backupRecord?.()||{version:1,date:'2026-10-19',time:null,timezone:null},settings:(()=>{const t={...S};delete t.key;delete t.apiKey;return t;})()});
  function save(){
    try{const body=JSON.stringify(snapshot());if(body.length>2800000)throw Error('Backup too large for local storage; export manually.');
       localStorage.setItem('maya.v5snapshot',body);localStorage.setItem('maya.v5backupTime',String(Date.now()));
@@ -2628,11 +2638,13 @@ try{frameMode=localStorage.getItem(PREF+'.frame')||'portrait';if($5('v8Frame'))$
  });
  function restoreSnapshot(s){
    if(!Array.isArray(s.memories)||!Array.isArray(s.packs)){ $('v5BackupStatus').textContent='Snapshot is invalid.';return;}
+   if(s.birthday&&!window.MayaBirthdayInfo?.validate?.(s.birthday)){$('v5BackupStatus').textContent='Invalid birthday record; existing backup not restored.';return;}
    const mem=getMem(),packs=getPacks();
    const existing=new Set(mem.map(m=>m.text)),existingPacks=new Set(packs.map(p=>p.text));
    const mm=s.memories.filter(m=>m&&typeof m.text==='string'&&!existing.has(m.text));
    const pp=s.packs.filter(p=>p&&typeof p.text==='string'&&!existingPacks.has(p.text));
    const okP=setPacks([...packs,...pp]);if(okP)setMem([...mem,...mm]);
+   if(okP&&s.birthday)window.MayaBirthdayInfo?.restoreFromBackup?.(s.birthday);
    if(okP&&s.settings&&typeof s.settings==='object'){
      for(const key of Object.keys(DEFAULTS)){if(key in s.settings && typeof s.settings[key]===typeof DEFAULTS[key])S[key]=s.settings[key];}
      saveS();
