@@ -10,7 +10,7 @@ export MAYA_DATA_KEY="$(printf 'a%.0s' {1..64})"
 export MAYA_ALLOWED_ORIGIN="https://maya.example.test"
 php -S "127.0.0.1:$PORT" -t "$ROOT/public" "$ROOT/public/index.php" >"$TMP/server.log" 2>&1 &
 PID=$!
-trap 'kill "$PID" 2>/dev/null || true; rm -rf "$TMP"' EXIT
+trap 'status=$?; if [ "$status" -ne 0 ]; then echo "---PHP test server log---"; tail -80 "$TMP/server.log"; fi; kill "$PID" 2>/dev/null || true; rm -rf "$TMP"' EXIT
 for n in {1..25}; do
   if curl -sf "http://127.0.0.1:$PORT/v1/health" >/dev/null; then break; fi
   sleep 0.2
@@ -31,7 +31,7 @@ assert "$health" "assert d['ok'] and d['configured']"
 created="$(req -d '{"text":"Maya remembers বাংলা facts"}' "$URL/memories")"
 assert "$created" "assert d['memory']['text'].startswith('Maya')"
 found="$(req --get --data-urlencode 'q=বাংলা' "$URL/memories/search")"
-assert "$found" "assert len(d['memories'])==1"
+echo "MEMORY_SEARCH=$found"; assert "$found" "assert d['ok'],d; assert len(d['memories'])==1"
 
 backup="$(req -d '{"consent":true,"payload":{"memoryPacks":["original pack"],"version":1}}' "$URL/backups")"
 assert "$backup" "assert d['backup']['id']"
