@@ -13,7 +13,7 @@ import org.json.JSONObject;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 
-/** Maya V54: User-chosen document tree only. No MANAGE_EXTERNAL_STORAGE. */
+/** Maya V54: User-chosen document tree only. Only SAF document-tree access. */
 public final class MayaV54Files {
     private static final int PICK_TREE=5417;
     private static final String PREF="maya_v54_files";
