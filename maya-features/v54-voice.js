@@ -1,7 +1,7 @@
 /* V54: deterministic voice commands; no unsupported open-ended phone automation. */
 const tidy=s=>String(s||'').normalize('NFKC').replace(/[।!?]+$/gu,'').replace(/\s+/g,' ').trim();
 export function parseV54Voice(raw){
- const v=tidy(raw);if(v.length>900)return null;
+ const v=tidy(raw).replace(/[০-৯]/gu,c=>String('০১২৩৪৫৬৭৮৯'.indexOf(c)));if(v.length>900)return null;
  const head=v.match(/^(?:hey\s+)?(?:maya|মায়া|মায়া)\s*[,،:]?\s+(.+)$/iu);
  if(!head)return null;
  const cmd=head[1];
@@ -17,7 +17,7 @@ export function parseV54Voice(raw){
  m=cmd.match(/^(\d{1,4})\s+মিনিট\s+পরে\s+(.+?)\s+মনে\s+করিয়ে\s+দাও$/u);
  if(m&&Number(m[1])>=1&&Number(m[1])<=525600&&m[2].length<=120)return {kind:'reminder',minutes:Number(m[1]),title:m[2]};
  m=cmd.match(/^(?:macro|app macro)\s+(.+?)\s+tap\s+(.+)$/iu);
- if(m&&m[1].length<=100&&m[2].length<=48)return {kind:'macro',app:m[1],label:m[2]};
+ if(m&&m[1].length<=100&&m[2].length<=48&&!/(send|delete|purchase|pay|checkout|confirm|submit|password|install|allow|otp|transfer|buy|remove|reset|uninstall|authorize|permission|security|payment|verify|login|sign in|পাঠা|মুছ|ডিলিট|কিন|পেমেন্ট|অনুমতি)/iu.test(m[2]))return {kind:'macro',app:m[1],label:m[2]};
  m=cmd.match(/^(?:run|start)\s+(?:my\s+)?routine\s+(.+)$/iu);
  if(m&&m[1].length<=70)return {kind:'routine',name:m[1]};
  if(/^(?:v54|phone automation)\s+(?:status|dashboard)$|^(?:অটোমেশন|ফোনের কাজ)\s+(?:স্ট্যাটাস|দেখাও)$/iu.test(cmd))return {kind:'status'};
