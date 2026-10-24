@@ -26,6 +26,9 @@ assert.ok(parser.includes("native('SCREEN_CAPTURE')"));
 assert.ok(parser.includes("native('SCREEN_DIAG')"));
 assert.ok(parser.includes("native('SCREEN_ENABLE',{enabled:true})"));
 assert.ok(parser.includes('Diagnose Android Screenshot Permissions'));
+assert.ok(parser.includes('Fallback: Android screen-sharing permission prompt'));
+assert.ok(parser.includes('requestScreenshot()'));
+assert.ok(parser.includes("screenshotPlugin.status()"));
 assert.ok(parser.includes("native('VIDEO_SEARCH'"));
 const screen=read('native-voice-media/MayaVoiceMedia.java');
 for(const q of ['takeScreenshot(Display.DEFAULT_DISPLAY','MayaV4AccessService.active',
