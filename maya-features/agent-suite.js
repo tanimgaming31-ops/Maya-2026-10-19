@@ -102,6 +102,8 @@ async function grounded(query,signal){
  return {answer,links};
 }
 let busy=false,stopper=null,selectedFile=null,plan=null;
+let lastWorkResult=Promise.resolve({ok:false,message:'No Agent task has been run.'});
+let voiceRunApproved=false;
 function show(message,error=false){const e=$('agentStatus');if(e){e.textContent=String(message);e.style.color=error?'#ffb2be':'#bff3e6';}}
 function output(value){const e=$('agentOutput');if(e)e.textContent=String(value);}
 function links(items){
@@ -121,20 +123,33 @@ function refreshHistory(){
  if(!rows.length)e.textContent='No Agent Suite tasks have been recorded yet.';
 }
 async function work(kind,fn){
- if(busy)return show('Another Agent task is running. Cancel it first.',true);
+ if(busy){show('Another Agent task is running. Cancel it first.',true);return {ok:false,message:'Agent is busy.'};}
+ let settle;
+ lastWorkResult=new Promise(resolve=>{settle=resolve;});
  busy=true;stopper=new AbortController();const button=$('agentCancel');if(button)button.disabled=false;
  show(kind+' running…');output('');links([]);
- try{await fn(stopper.signal);show(kind+' finished.');log(kind,'done','Finished user-requested task');}
- catch(e){show(kind+': '+(e?.name==='AbortError'?'cancelled':clean(e?.message||e,180)),true);log(kind,e?.name==='AbortError'?'cancelled':'failed',clean(e?.message||'Cancelled',140));}
- finally{busy=false;stopper=null;if(button)button.disabled=true;}
+ let result={ok:false,message:kind+' not finished.'};
+ try{
+   await fn(stopper.signal);
+   show(kind+' finished.');log(kind,'done','Finished user-requested task');
+   result={ok:true,message:clean($('agentOutput')?.textContent||kind+' finished.',1200)};
+ }catch(e){
+   const failure=e?.name==='AbortError'?'cancelled':clean(e?.message||e,180);
+   show(kind+': '+failure,true);log(kind,e?.name==='AbortError'?'cancelled':'failed',clean(e?.message||'Cancelled',140));
+   result={ok:false,message:kind+': '+failure};
+ }finally{
+   busy=false;stopper=null;if(button)button.disabled=true;
+   settle(result);
+ }
+ return result;
 }
 function panel(){
  if($('mayaAgentSuite'))return;
  const host=document.querySelector('#setSheet .body');if(!host)return;
  const root=document.createElement('details');root.id='mayaAgentSuite';root.style.cssText='margin:16px 0;padding:14px;border:1px solid #ba70ff;border-radius:16px;background:#100e20';
  root.innerHTML=`
- <summary style="font-weight:750;cursor:pointer;font-size:16px">Maya Agent Suite — 8 Advanced Tools (V29)</summary>
- <p class="note">Inside your existing Maya app. Works when Maya is open. Uses your saved Gemini key and free quota when available. No background/unsupervised browsing, arbitrary app clicks, or automatic messaging. Old Memory Packs, avatar and voice are unchanged.</p>
+ <summary style="font-weight:750;cursor:pointer;font-size:16px">Maya Agent Suite — 8 Voice + Touch Tools (V30)</summary>
+ <p class="note">Inside your existing Maya app. Speak commands beginning with Maya/মায়া after enabling Life Voice in Settings. Search, planning and research can start by voice. Files must be chosen manually and require consent. Your existing key, memory, avatar and voice stay in place. No hidden Android or browser control.</p>
  <h3>1 · AI Agent Mode</h3><textarea class="inp wide" id="agentGoal" maxlength="600" rows="2" placeholder="Example: research electric cars and compare key differences"></textarea>
  <button class="btn pri" id="agentPlan">AI: Prepare safe plan</button><pre class="msg" id="agentPlanView" style="white-space:pre-wrap;overflow-wrap:anywhere">No plan yet.</pre>
  <h3>2 · Browser Agent (safe)</h3>
@@ -183,7 +198,8 @@ function panel(){
   $('agentPlanView').textContent=plan.goal+'\n'+plan.steps.map((x,i)=>(i+1)+'. '+x.summary+' ['+x.tool+'] '+(x.args.query||x.args.topic)).join('\n');
   $('agentRunPlan').disabled=false;output('Plan prepared but NOT executed. Read the steps above, then approve execution.');});
  $('agentRunPlan').onclick=()=>{if(!plan)return show('Prepare a plan first.',true);
-  if(!confirm('Run these '+plan.steps.length+' read-only search steps? This will contact Wikipedia and/or Google Gemini.'))return;
+  const spokenApproval=voiceRunApproved;voiceRunApproved=false;
+  if(!spokenApproval&&!confirm('Run these '+plan.steps.length+' read-only search steps? This will contact Wikipedia and/or Google Gemini.'))return;
   void work('Multi-step Automation',async signal=>{
    const report=[];const sources=[];
    for(let i=0;i<plan.steps.length;i++){
@@ -238,6 +254,81 @@ function panel(){
  });
  $('agentClearHistory').onclick=()=>{if(confirm('Delete only Agent Suite task statuses from this device?')){localStorage.removeItem(HISTORY_KEY);refreshHistory();show('Agent task history cleared. Original Maya memories are untouched.');}};
  refreshHistory();
+}
+/* Voice uses the same tested click handlers and task state as the touch UI.
+   Only explicitly spoken read-only plans skip the separate modal. Sensitive file/code
+   uploads retain a confirmation dialog, and files require manual selection. */
+export async function runAgentVoiceCommand(command){
+ if(typeof document==='undefined')return 'Agent UI is unavailable here.';
+ if(!$('mayaAgentSuite'))panel();
+ const root=$('mayaAgentSuite');
+ if(!root)return 'Open Maya Settings once to load Agent Suite.';
+ const open=()=>{const btn=$('btnSet');if(btn&&!document.querySelector('#setSheet.open'))btn.click();root.open=true;};
+ const doTask=async button=>{
+   if(busy)return 'Agent is already working. Say Maya stop agent to cancel.';
+   button.click();
+   const result=await lastWorkResult;
+   if(result.ok)return clean(result.message,600)||'The Agent task finished; see Agent Suite for details.';
+   return result.message;
+ };
+ if(!command||typeof command!=='object')return 'Unsupported agent command.';
+ if(command.kind==='cancel'){
+   if(!stopper)return 'No Agent task is running.';
+   stopper.abort();return 'I stopped the current Agent task.';
+ }
+ if(command.kind==='dashboard'){
+   const recent=readHistory(localStorage).slice(0,4);
+   return recent.length?'Recent Agent tasks: '+recent.map(x=>x.kind+' '+x.status).join('; ')+'.':'No Agent tasks recorded yet.';
+ }
+ if(busy)return 'Another Agent task is running. Say Maya stop agent first.';
+ switch(command.kind){
+  case 'plan':
+  case 'autoPlan':{
+    open();$('agentGoal').value=clean(command.goal,500);
+    let result=await doTask($('agentPlan'));
+    if(!plan||!result.includes('Plan prepared'))return result;
+    if(command.kind==='plan')return 'I prepared a read-only plan with '+plan.steps.length+' steps. Say Maya run plan to execute it.';
+    voiceRunApproved=true;
+    $('agentRunPlan').click();
+    voiceRunApproved=false;
+    const run=await lastWorkResult;
+    return run.ok?'Finished '+plan.steps.length+' read-only research steps. '+clean(run.message,320):run.message;
+  }
+  case 'runPlan':{
+    if(!plan)return 'First say Maya make a plan about your research topic.';
+    voiceRunApproved=true;
+    $('agentRunPlan').click();
+    voiceRunApproved=false;
+    const result=await lastWorkResult;
+    return result.ok?'Plan finished. '+clean(result.message,400):result.message;
+  }
+  case 'research':
+    open();$('agentTopic').value=clean(command.topic,160);
+    return doTask($('agentResearch'));
+  case 'browser':
+    open();$('agentBrowser').value=clean(command.query,250);
+    $('agentSearch').click();
+    return 'Requested a Google search for '+clean(command.query,80)+'. If the browser blocked the new tab, use Browser Agent in Settings.';
+  case 'url':
+    open();$('agentBrowser').value=String(command.url||'');
+    if(!escapeUrl(command.url))return 'Only safe HTTPS addresses are supported.';
+    $('agentOpenUrl').click();
+    return 'Requested the HTTPS webpage. If it did not open, tap Open HTTPS URL in Agent Suite.';
+  case 'phone':
+    open();$('agentApp').value=clean(command.name,100);
+    return doTask($('agentAppOpen'));
+  case 'file':
+    open();
+    if(!selectedFile){show('Choose a file on-screen; phones do not allow voice to select arbitrary private files.');
+      return 'Please select your PDF, photo or document in File Agent first. I cannot read private phone files without your selection.';}
+    return doTask($('agentAnalyze')); // retains upload confirmation
+  case 'code':
+    open();
+    if(command.code)$('agentCode').value=clean(command.code,450);
+    if(!$('agentCode').value.trim())return 'I need some code. You can dictate a short snippet or paste code in Coding Assistant.';
+    return doTask($('agentCodeReview')); // retains upload confirmation
+  default:return 'That voice Agent action is not supported.';
+ }
 }
 if(typeof document!=='undefined'){
  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',panel,{once:true});else panel();
