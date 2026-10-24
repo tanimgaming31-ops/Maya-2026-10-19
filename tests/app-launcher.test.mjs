@@ -49,3 +49,50 @@ assert.ok(bridge.includes('parseOpenAppCommand(t)'),'voice command app parser mi
 assert.ok(bridge.includes("case 'appLaunch'"),'app launcher case missing');
 assert.ok(loader.includes("import './app-launcher.js'"),'launcher module missing from original Maya');
 console.log('Maya App Launcher: parser, exact-label, alias, ambiguity, security and voice bridge checks passed. Requires Android device tests.');
+
+/* ---- Fuzzy suggestions (template AppResolver integration): tap-required, never auto-launch. ---- */
+assert.equal(m.rankedMatches('messnger',apps).length,0); // internal typo: no exact match
+assert.deepEqual(m.suggestAppMatches('messnger',apps).map(a=>a.label),['Messenger']);
+assert.equal(m.rankedMatches('whatsap',apps).length,0);
+assert.deepEqual(m.suggestAppMatches('whatsap',apps).map(a=>a.label),['WhatsApp']); // not WhatsApp Business
+assert.deepEqual(m.suggestAppMatches('com.whatsapp',apps),[]); // package-style query: never guessed
+assert.deepEqual(m.suggestAppMatches('com.whatsapp.w4b',apps),[]);
+assert.deepEqual(m.suggestAppMatches('zzqqxxnope',apps),[]); // far-off name: no suggestions
+assert.deepEqual(m.suggestAppMatches('ab',apps),[]); // too short
+assert.deepEqual(m.suggestAppMatches('WhatsApp',apps),[]); // exact matches stay in rankedMatches
+assert.deepEqual(m.suggestAppMatches('messnger',null),[]);
+assert.ok(m.suggestAppMatches('messnger',apps).length<=3); // template's 3-candidate cap
+const agentSuiteSrc=readFileSync(new URL('../maya-features/agent-suite.js',import.meta.url),'utf8');
+assert.ok(agentSuiteSrc.includes('openNamedApp'),'agent phone voice route must keep calling openNamedApp');
+
+/* ---- Behavioral: a fuzzy suggestion only opens via the tap-required chooser; nothing auto-launches. ---- */
+const launchCalls=[];const madeButtons=[];const fakeElements=Object.create(null);
+const makeEl=id=>({id,hidden:true,style:{},onclick:null,textContent:'',children:[],replaceChildren(){this.children=[];},append(...cs){this.children.push(...cs);},addEventListener(){},removeEventListener(){}});
+globalThis.window={MayaBridge:{
+ listLaunchableApps:()=>JSON.stringify({status:'ok',apps}),
+ launchListedApp:(pkg,act)=>{launchCalls.push([pkg,act]);return JSON.stringify({status:'launched'});}
+}};
+globalThis.document={
+ readyState:'complete',hidden:false,
+ getElementById:id=>fakeElements[id]||(fakeElements[id]=makeEl(id)),
+ querySelector:()=>null,
+ createElement:()=>{const b={className:'',style:{},onclick:null,textContent:''};madeButtons.push(b);return b;},
+ addEventListener(){},removeEventListener(){}
+};
+const m2=await import('data:text/javascript;base64,'+Buffer.from(raw+'\n// behavioral test instance').toString('base64'));
+const openPromise=m2.openNamedApp('messnger');
+await new Promise(r=>setTimeout(r,20));
+assert.equal(launchCalls.length,0); // no native launch before the user taps
+assert.ok(fakeElements['mayaAppChoiceCaption'].textContent.includes('Did you mean'),'suggestion caption missing');
+const suggestionButtons=madeButtons.filter(b=>b.textContent.startsWith('Messenger ('));
+assert.equal(suggestionButtons.length,1,'Messenger suggestion button missing');
+suggestionButtons[0].onclick(); // user taps the suggestion
+assert.equal(await openPromise,'Android launch requested: Messenger.');
+assert.deepEqual(launchCalls,[['com.facebook.orca','com.facebook.orca.Main']]);
+const cancelPromise=m2.openNamedApp('messnger');
+await new Promise(r=>setTimeout(r,20));
+assert.equal(launchCalls.length,1); // still exactly one launch
+fakeElements['mayaAppCancel'].onclick(); // user cancels
+assert.equal(await cancelPromise,'App selection cancelled.');
+assert.equal(launchCalls.length,1); // cancelling launches nothing
+console.log('Maya App Launcher fuzzy suggestions: voice-misspelling suggestions are tap-required and never auto-launch.');

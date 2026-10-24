@@ -41,10 +41,50 @@ export function rankedMatches(query,apps){
   if(label===target)score=120;
   else if(label.startsWith(target+' '))score=95;
   else if(label.includes(' '+target+' ')||label.endsWith(' '+target))score=80;
-  // No Levenshtein, package guessing or automatic launches from weak matches.
+  // No fuzzy auto-launching or package guessing here: a weak match never opens an app by itself.
+  // Fuzzy suggestions exist separately in suggestAppMatches and always require a user tap.
   if(score)scored.push({...a,score});
  }
  return scored.sort((a,b)=>b.score-a.score||a.label.localeCompare(b.label)||a.packageName.localeCompare(b.packageName)).slice(0,30);
+}
+/* Fuzzy suggestions for voice misspellings, adapted from the app-launcher template's
+   AppResolver: Levenshtein similarity (>=0.7) on visible labels only, top 3 candidates.
+   Suggestions are tap-required — a weak match NEVER auto-launches an app.
+   Dotted package-style queries are ignored so package names are never guessed or launched. */
+export function suggestAppMatches(rawQuery,apps){
+ if(!Array.isArray(apps))return [];
+ const raw=String(rawQuery||'').trim();
+ if(!raw||raw.length>100)return [];
+ if(/^[a-z0-9_]+(?:\.[a-z0-9_]+)+$/i.test(raw))return [];
+ const target=normalizeName(targetName(raw));
+ if(!target||target.length<3)return [];
+ const close=[];
+ for(const a of apps){
+  if(!a||typeof a.label!=='string'||typeof a.packageName!=='string'||typeof a.activityName!=='string')continue;
+  const label=normalizeName(a.label);
+  if(!label||label===target)continue;
+  const sim=similarity(target,label);
+  if(sim>=0.7)close.push({...a,score:sim});
+ }
+ return close.sort((a,b)=>b.score-a.score||a.label.localeCompare(b.label)||a.packageName.localeCompare(b.packageName)).slice(0,3);
+}
+function similarity(a,b){
+ const n=a.length,m=b.length;
+ if(!n||!m)return 0;
+ return 1-levenshtein(a,b)/Math.max(n,m);
+}
+function levenshtein(a,b){
+ if(a===b)return 0;
+ if(!a.length)return b.length;
+ if(!b.length)return a.length;
+ let prev=Array.from({length:b.length+1},(_,j)=>j);
+ for(let i=1;i<=a.length;i++){
+  const cur=[i];
+  for(let j=1;j<=b.length;j++)
+   cur[j]=Math.min(prev[j]+1,cur[j-1]+1,prev[j-1]+(a.charCodeAt(i-1)===b.charCodeAt(j-1)?0:1));
+  prev=cur;
+ }
+ return prev[b.length];
 }
 function nativeBridge(){
  const b=typeof window!=='undefined'?window.MayaBridge:null;
@@ -97,7 +137,11 @@ async function choose(matches,reason){
 export async function openNamedApp(name){
  try{
   const apps=installedApps(),found=rankedMatches(name,apps);
-  if(!found.length)return 'No visible installed app named "'+String(name).slice(0,80)+'". Check spelling or the Installed Apps list in Maya Settings.';
+  if(!found.length){
+   const close=suggestAppMatches(name,apps);
+   if(close.length)return await choose(close,'No exact match for "'+String(name).slice(0,80)+'". Did you mean one of these? Tap to open — no app opens until you select.');
+   return 'No visible installed app named "'+String(name).slice(0,80)+'". Check spelling or the Installed Apps list in Maya Settings.';
+  }
   if(found[0].score===120&&(found.length===1||found[1].score<120))return nativeOpen(found[0]);
   return await choose(found,'Which installed app did you mean? Tap its name to open. No app will open until selected.');
  }catch(e){return String(e?.message||e);}
