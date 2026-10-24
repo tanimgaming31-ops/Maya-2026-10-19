@@ -12,6 +12,8 @@ import './agent-voice-bridge.js';
 import './v54-voice.js';
 import './v54-suite.js';
 import './v54-voice-bridge.js';
+import './birthday.js';
+import './birthday-voice.js';
 function init(){
   const host=document.querySelector('#setSheet .body');
   if(!host||document.getElementById('mayaAdvancedLink'))return;
