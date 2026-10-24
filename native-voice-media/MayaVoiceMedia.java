@@ -1,6 +1,7 @@
 package com.tanim.maya;
 
 import android.accessibilityservice.AccessibilityService;
+import android.accessibilityservice.AccessibilityServiceInfo;
 import android.app.Activity;
 import android.content.ContentValues;
 import android.content.Context;
@@ -55,6 +56,7 @@ public final class MayaVoiceMedia {
                 c.getSharedPreferences(PREF,0).edit().putBoolean(OPT_IN,on).apply();
                 return json("ok",on?"Voice screenshot enabled. Enable Maya Accessibility in Android Settings.":"Voice screenshot disabled.");
             }
+            if("SCREEN_DIAG".equals(action))return screenshotDiagnostics(c);
             if("SCREEN_CAPTURE".equals(action))return screenshot(c);
             if("SCREEN_STATUS".equals(action))return screenshotStatus(c);
             if("VIDEO_SEARCH".equals(action))return search(c,args.optString("query",""));
@@ -70,6 +72,32 @@ public final class MayaVoiceMedia {
             return json("error","Unsupported voice media action.");
         }catch(Exception e){return json("error","Invalid voice media request.");}
     }
+    /** Android's permission, bound service, and screenshot capability are distinct. */
+    public static String screenshotDiagnostics(Context c){
+        try {
+            MayaV4AccessService access=MayaV4AccessService.active;
+            boolean connected=access!=null;
+            boolean capability=false;
+            if(connected){
+                AccessibilityServiceInfo info=access.getServiceInfo();
+                capability=info!=null &&
+                   (info.getCapabilities() & AccessibilityServiceInfo.CAPABILITY_CAN_TAKE_SCREENSHOT)!=0;
+            }
+            JSONObject out=new JSONObject();
+            out.put("status","ok");
+            out.put("androidSdk",Build.VERSION.SDK_INT);
+            out.put("voiceScreenshotOptIn",opted(c));
+            out.put("accessibilityConnected",connected);
+            out.put("screenshotCapability",capability);
+            out.put("latestCapture",screenshotStatus(c));
+            out.put("message",Build.VERSION.SDK_INT<30?"Use the Android screen-capture permission button: direct Accessibility screenshot requires Android 11+."
+                :!connected?"Enable Maya Screen Controls in Android Accessibility settings; after an APK upgrade turn the service OFF and back ON."
+                :!capability?"Android has not granted screenshot capability to the running Maya Accessibility service. Turn it OFF and ON in Settings after the update."
+                :!opted(c)?"Enable Voice Screenshot in Maya Settings."
+                :"Ready for one screenshot request. Use Screenshot now to verify Gallery save.");
+            return out.toString();
+        }catch(Exception e){return json("error","Could not read Screenshot diagnostics.");}
+    }
     public static String screenshotStatus(Context c){
         String status=shotStatus,uri=shotUri,description=shotMessage;
         try{
@@ -78,7 +106,16 @@ public final class MayaVoiceMedia {
             description=p.getString("captureMessage",description);
             uri=p.getString("captureUri",uri);
         }catch(Exception ignored){}
-        try{return new JSONObject().put("status",status).put("message",description).put("uri",uri).toString();}
+        try{
+            if("capturing".equals(status)){
+                long start=c.getSharedPreferences(PREF,0).getLong("captureStartedAt",0);
+                if(start>0&&System.currentTimeMillis()-start>16000){
+                    complete(c,"timeout","Android screenshot callback timed out; check Maya Accessibility screenshot permission.","");
+                    status="timeout";description=shotMessage;uri="";
+                }
+            }
+            return new JSONObject().put("status",status).put("message",description).put("uri",uri).toString();
+        }
         catch(Exception e){return json("error","Screenshot status unavailable.");}
     }
     private static void writeStatus(Context c,String status,String message,String uri){
@@ -92,8 +129,22 @@ public final class MayaVoiceMedia {
         if(Build.VERSION.SDK_INT<30)return json("unsupported","One-command Accessibility screenshot needs Android 11+. Use the existing Android capture consent button on Android 10.");
         MayaV4AccessService access=MayaV4AccessService.active;
         if(access==null)return json("needs_accessibility","Enable Maya Screen Controls under Android Accessibility settings.");
+        AccessibilityServiceInfo activeInfo=access.getServiceInfo();
+        if(activeInfo==null||(activeInfo.getCapabilities() &
+            AccessibilityServiceInfo.CAPABILITY_CAN_TAKE_SCREENSHOT)==0)
+            return json("needs_accessibility","Maya Screen Controls is enabled but Android has not granted screenshot capability. Turn the service OFF and ON in Android Accessibility settings.");
         if(!CAPTURING.compareAndSet(false,true))return json("busy","A screenshot is already processing.");
         writeStatus(c,"capturing","Android screenshot requested; not saved yet.","");
+        final long started=SystemClock.elapsedRealtime();
+        c.getSharedPreferences(PREF,0).edit().putLong("captureStartedAt",System.currentTimeMillis()).apply();
+        // An Android callback can be lost after service shutdown or a platform failure.
+        // Never leave Gallery status as "capturing" indefinitely.
+        UI.postDelayed(()->{
+            if(CAPTURING.get() && "capturing".equals(shotStatus)
+               && SystemClock.elapsedRealtime()-started>=14000){
+                complete(c,"timeout","Android did not return a screenshot within 14 seconds; re-enable Maya Screen Controls or try the original Capture Screen permission button.","");
+            }
+        },14500);
         UI.post(()->{
             try{
                 if(MayaV4AccessService.active!=access){complete(c,"error","Accessibility disconnected.","");return;}
@@ -102,7 +153,18 @@ public final class MayaVoiceMedia {
                         new Thread(()->saveGallery(c,result),"maya-shot-save").start();
                     }
                     @Override public void onFailure(int errorCode){
-                        complete(c,"error","Android rejected screenshot (error "+errorCode+"). Secure/protected windows are not capturable.","");
+                        String why=errorCode==AccessibilityService.ERROR_TAKE_SCREENSHOT_NO_ACCESSIBILITY_ACCESS
+                          ?"Android Accessibility is disabled or screenshot access was revoked. Switch Maya Screen Controls OFF and ON."
+                          :errorCode==AccessibilityService.ERROR_TAKE_SCREENSHOT_INTERVAL_TIME_SHORT
+                          ?"Android rate-limited screenshots. Wait a few seconds, then try again."
+                          :errorCode==AccessibilityService.ERROR_TAKE_SCREENSHOT_INVALID_DISPLAY
+                          ?"Android rejected the selected display."
+                          :errorCode==AccessibilityService.ERROR_TAKE_SCREENSHOT_INTERNAL_ERROR
+                          ?"Android screenshot internal error. Try another non-protected screen."
+                          :errorCode==6
+                          ?"The screen is protected (secure content); Android blocks screenshots."
+                          :"Android screenshot failed (code "+errorCode+").";
+                        complete(c,"error",why,"");
                     }
                 });
             }catch(Exception e){complete(c,"error","Android screenshot API was unavailable.","");}
@@ -135,6 +197,7 @@ public final class MayaVoiceMedia {
             }
             ContentValues publish=new ContentValues();publish.put(MediaStore.Images.Media.IS_PENDING,0);
             if(c.getContentResolver().update(saved,publish,null,null)<1)throw new IllegalStateException("Gallery did not publish screenshot");
+            if(!"capturing".equals(shotStatus))return;
             complete(c,"saved","Screenshot saved in Gallery → Pictures/Maya.",saved.toString());saved=null;
         }catch(Exception error){
             if(saved!=null)try{c.getContentResolver().delete(saved,null,null);}catch(Exception ignored){}
