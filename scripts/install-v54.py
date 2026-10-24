@@ -7,7 +7,7 @@ main=base/'MainActivity.java'
 bridge=base/'MayaBridge.java'
 if not main.exists() or not bridge.exists():
     raise SystemExit('Maya Android native tree missing')
-for name in ('MayaV54Files.java','MayaV54Bridge.java'):
+for name in ('MayaV54Files.java','MayaV54Bridge.java','MayaV54Macro.java'):
     source=Path('native-v54')/name
     if not source.is_file():
         raise SystemExit('Missing '+str(source))
