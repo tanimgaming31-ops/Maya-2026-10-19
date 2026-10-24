@@ -22,6 +22,7 @@ on:
       - 'native-life/**'
       - 'native-app-launcher/**'
       - 'native-v54/**'
+      - 'native-voice-media/**'
       - 'scripts/**'
 
 permissions:
@@ -95,6 +96,10 @@ jobs:
           test -s maya-features/private-vault.js
           test -s maya-features/screenshot.js
           test -s maya-features/voice-screenshot.js
+          test -s maya-features/voice-media.js
+          test -s maya-features/voice-media-bridge.js
+          test -s native-voice-media/MayaVoiceMedia.java
+          test -s scripts/install-voice-media.py
           test -s native-screenshot/MayaScreenshot.java
           test -s native-screenshot/MayaCaptureService.java
           test -s scripts/install-screenshot.py
@@ -129,6 +134,7 @@ jobs:
           python3 tests/app-launcher-native-check.py
           python3 tests/life-native-check.py
           node tests/voice-screenshot.test.cjs
+          node tests/media-voice.test.mjs
           python3 tests/native-screenshot-check.py
           for js in maya-features/*.js; do node --input-type=module --check < "$js"; done
           grep -Fq "import './agent-suite.js'" maya-features/advanced-loader.js
@@ -151,7 +157,7 @@ jobs:
           html.write_text(s, encoding='utf-8')
           sw = Path('www/sw.js')
           w = sw.read_text(encoding='utf-8')
-          w = re.sub(r"const V = '[^']+';", "const V = 'maya-v55-creator-birthday-20261024';", w, count=1)
+          w = re.sub(r"const V = '[^']+';", "const V = 'maya-voice-media-gallery-youtube-20261024';", w, count=1)
           if "'./maya-v18-runtime.js'" not in w:
               if 'const SHELL = [' not in w: raise SystemExit('Unexpected sw.js shell declaration')
               w = w.replace('const SHELL = [', "const SHELL = ['./maya-v18-runtime.js', './maya-features/feature-registry.js', './maya-features/android-bridge.js', './maya-features/memory-v2.js', './maya-features/productivity.js', './maya-features/daily-briefing.js', './maya-features/advanced-loader.js', './maya-features/agent-suite.js', './maya-features/agent-voice.js', './maya-features/agent-voice-bridge.js', './maya-features/offline-commands.js', './maya-features/advanced-panel.html', './maya-features/private-vault.js', './maya-features/screenshot.js', './maya-features/voice-screenshot.js', './maya-features/life-suite.js', './maya-features/life-voice.js', './maya-features/smart-hub.js', './maya-features/app-launcher.js', ",1)
@@ -159,6 +165,8 @@ jobs:
               w = w.replace("'./maya-features/agent-suite.js', ", "'./maya-features/agent-suite.js', './maya-features/v54-voice.js', './maya-features/v54-suite.js', './maya-features/v54-voice-bridge.js', ", 1)
           if "'./maya-features/birthday-core.js'" not in w:
               w = w.replace("'./maya-features/agent-suite.js', ", "'./maya-features/agent-suite.js', './maya-features/birthday-core.js', './maya-features/birthday.js', './maya-features/birthday-voice.js', ", 1)
+          if "'./maya-features/voice-media.js'" not in w:
+              w = w.replace("'./maya-features/voice-screenshot.js', ", "'./maya-features/voice-screenshot.js', './maya-features/voice-media.js', './maya-features/voice-media-bridge.js', ", 1)
           sw.write_text(w, encoding='utf-8')
           print('Maya V18 integrated in www/ without editing original repository index.html or setup-native.sh')
           PY_V18
@@ -170,6 +178,8 @@ jobs:
           test -s www/maya-features/birthday-core.js
           test -s www/maya-features/birthday.js
           test -s www/maya-features/birthday-voice.js
+          test -s www/maya-features/voice-media.js
+          test -s www/maya-features/voice-media-bridge.js
           test -s www/maya-features/v54-suite.js
           test -s www/maya-features/v54-voice.js
           test -s www/maya-features/v54-voice-bridge.js
@@ -206,6 +216,10 @@ jobs:
           python3 scripts/install-life-native.py
           python3 scripts/install-app-launcher.py
           python3 scripts/install-v54.py
+          python3 scripts/install-voice-media.py
+          grep -Fq 'public String mediaVoice(String action, String json)' android/app/src/main/java/com/tanim/maya/MayaBridge.java
+          grep -Fq 'android:canTakeScreenshot="true"' android/app/src/main/res/xml/maya_v4_accessibility.xml
+          test -s android/app/src/main/java/com/tanim/maya/MayaVoiceMedia.java
           grep -Fq 'public String v54(String action, String json)' android/app/src/main/java/com/tanim/maya/MayaBridge.java
           grep -Fq 'MayaV54Files.accept(this, requestCode, resultCode, data)' android/app/src/main/java/com/tanim/maya/MainActivity.java
           test -s android/app/src/main/java/com/tanim/maya/MayaV54Macro.java
@@ -261,4 +275,4 @@ jobs:
           cp android/app/build/outputs/apk/debug/app-debug.apk Maya.apk
           gh release create "v${{ github.run_number }}" Maya.apk \
             --title "Maya v${{ github.run_number }}" \
-            --notes "Maya birthday update: Created 19 October 2026 (exact clock time unknown until user saves it); birthday voice replies, calendar age, annual in-app 2D/3D avatar glow celebration and birthday in original Memory/V5 backups. Preserves V54 native suite: Voice-driven native six-feature upgrade with opt-in one-step Accessibility app macro, Android Notification Quick Reply, scoped SAF folder manager, OS background reminders, saved routines and command routing. Reuses Maya's existing eight-feature Agent Suite in Settings (planning, browser links, Android app launcher, file analysis, grounded research, read-only multi-step tasks, coding review, local dashboard). Requires the user's own Gemini key/quota. Previous 3D, voice, memory and native features preserved. Android device test still needed."
+            --notes "Maya Voice Media upgrade: explicit voice screenshot from Android Accessibility saved to Gallery Pictures/Maya, no hidden capture; bounded YouTube search and title-match auto-tap (playback must be device verified). Keeps Maya Birthday update: Created 19 October 2026 (exact clock time unknown until user saves it); birthday voice replies, calendar age, annual in-app 2D/3D avatar glow celebration and birthday in original Memory/V5 backups. Preserves V54 native suite: Voice-driven native six-feature upgrade with opt-in one-step Accessibility app macro, Android Notification Quick Reply, scoped SAF folder manager, OS background reminders, saved routines and command routing. Reuses Maya's existing eight-feature Agent Suite in Settings (planning, browser links, Android app launcher, file analysis, grounded research, read-only multi-step tasks, coding review, local dashboard). Requires the user's own Gemini key/quota. Previous 3D, voice, memory and native features preserved. Android device test still needed."
