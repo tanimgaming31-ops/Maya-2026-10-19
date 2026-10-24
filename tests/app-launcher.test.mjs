@@ -74,7 +74,7 @@ assert.ok(agentSuiteSrc.includes("case 'phone'"),'agent phone dispatch missing')
 assert.ok(agentSuiteSrc.includes('openNamedApp(name)'),'agent phone route must call openNamedApp');
 
 /* ---- Behavioral harness: fake native bridge + minimal DOM (chooser, settings host). ---- */
-const launchCalls=[];const madeButtons=[];const registry=Object.create(null);
+const launchCalls=[];const madeButtons=[];const registry=Object.create(null);let launchStatus={status:'launched'};let notifyPermissionStatus={status:'requested'};
 function newFakeEl(){
  const el={hidden:true,style:{},onclick:null,value:'',textContent:'',className:'',placeholder:'',maxLength:0,checked:false,disabled:false,open:false,children:[],_html:'',_id:''};
  el.append=(...cs)=>{el.children.push(...cs);};
@@ -89,7 +89,8 @@ function newFakeEl(){
 let lifeEnabled=true;
 globalThis.window={MayaBridge:{
  listLaunchableApps:()=>JSON.stringify({status:'ok',apps}),
- launchListedApp:(pkg,act)=>{launchCalls.push([pkg,act]);return JSON.stringify({status:'launched'});}
+ launchListedApp:(pkg,act)=>{launchCalls.push([pkg,act]);return JSON.stringify({...launchStatus});},
+ requestLaunchNotifications:()=>JSON.stringify({...notifyPermissionStatus})
 },dispatchEvent(){}};
 globalThis.Event=class Event{constructor(t){this.type=t;}};
 globalThis.localStorage={getItem:k=>k==='maya_life_voice_v25'?(lifeEnabled?'true':null):null,setItem(){},removeItem(){}};
@@ -164,5 +165,35 @@ tapSuggestion('Messenger');
 assert.equal(await agentRun,'Android launch requested: Messenger.');
 assert.deepEqual(launchCalls[4],['com.facebook.orca','com.facebook.orca.Main']);
 assert.equal(launchCalls.length,5);
+/* ---- Native background-launch outcomes: a posted notification is pending user action, not failure. ---- */
+const beforeBg=launchCalls.length;
+launchStatus={status:'background'};
+assert.equal(await m2.openNamedApp('WhatsApp'),'ব্যাকগ্রাউন্ড লঞ্চ: "WhatsApp" খুলতে নোটিফিকেশনে ট্যাপ করো।');
+assert.deepEqual(launchCalls[beforeBg],['com.whatsapp','com.whatsapp.Main']);
+// The Life Voice route reports the same deferred outcome to the user.
+assert.equal(await lifeApi.runLifeVoice(lifeApi.parseLifeVoice('Maya open WhatsApp')),'ব্যাকগ্রাউন্ড লঞ্চ: "WhatsApp" খুলতে নোটিফিকেশনে ট্যাপ করো।');
+assert.deepEqual(launchCalls[beforeBg+1],['com.whatsapp','com.whatsapp.Main']);
+const agentBg=agentSuite.runAgentVoiceCommand(agentVoice.parseAgentVoice('Maya open app messnger'));
+await settle();
+assert.equal(launchCalls.length,beforeBg+2); // chooser shown, nothing new launched yet
+tapSuggestion('Messenger');
+assert.equal(await agentBg,'ব্যাকগ্রাউন্ড লঞ্চ: "Messenger" খুলতে নোটিফিকেশনে ট্যাপ করো।');
+assert.deepEqual(launchCalls[beforeBg+2],['com.facebook.orca','com.facebook.orca.Main']);
+launchStatus={status:'notification_blocked'};
+assert.ok((await m2.openNamedApp('WhatsApp')).startsWith('App not opened: '));
+// Blocked notifications stay failures on both voice routes — never reported as success.
+assert.ok((await lifeApi.runLifeVoice(lifeApi.parseLifeVoice('Maya open WhatsApp'))).startsWith('App not opened: '));
+const agentBlocked=agentSuite.runAgentVoiceCommand(agentVoice.parseAgentVoice('Maya open app WhatsApp'));
+await settle();
+assert.ok((await agentBlocked).startsWith('Phone App Launcher: App not opened: '));
+launchStatus={status:'launched'};
+// Settings control for the notification permission exists and reports the request.
+assert.ok(registry['mayaAppBgNotify'],'background notification settings button missing');
+registry['mayaAppBgNotify'].onclick();
+assert.ok(registry['mayaAppStatus'].textContent.includes('Allow'),'permission request status missing');
+notifyPermissionStatus={status:'blocked'};
+registry['mayaAppBgNotify'].onclick();
+assert.ok(registry['mayaAppStatus'].textContent.includes('Notifications'),'blocked notification status missing');
 console.log('Maya App Launcher fuzzy suggestions: voice-misspelling suggestions are tap-required and never auto-launch.');
 console.log('Voice routes verified: Life Voice and Agent phone commands dispatch through the real launcher with gates intact.');
+console.log('Background launches: deferred to a tap-to-open notification; blocked notifications stay failures.');

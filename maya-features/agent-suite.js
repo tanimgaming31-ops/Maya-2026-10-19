@@ -218,7 +218,8 @@ function panel(){
  $('agentAppOpen').onclick=()=>void work('Phone App Launcher',async()=>{
   const name=clean($('agentApp').value,100);if(!name)throw Error('Enter an installed app name.');
   const response=await openNamedApp(name);output(response);
-  if(!response.startsWith('Android launch requested:'))throw Error(response);
+  // A posted background-launch notification is a pending user action, not a failure.
+  if(!response.startsWith('Android launch requested:')&&!response.startsWith('ব্যাকগ্রাউন্ড লঞ্চ:'))throw Error(response);
  });
  $('agentFile').onchange=e=>{selectedFile=e.target.files?.[0]||null;show(selectedFile?'Selected: '+clean(selectedFile.name,90)+' ('+selectedFile.size+' bytes)':'No file selected.');};
  $('agentAnalyze').onclick=()=>void work('File Agent',async signal=>{

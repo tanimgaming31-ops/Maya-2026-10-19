@@ -93,6 +93,14 @@ public final class MayaAppCatalog {
             if (label == null) return result("unavailable", "App is not currently visible as a launchable Android activity.").toString();
             Intent launch = Intent.makeMainActivity(new ComponentName(packageName, activityName));
             launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED);
+            // Android blocks activity starts from the background; a system-delivered
+            // notification tap is the user-initiated path, so defer to a notification.
+            if (!MayaBackgroundLaunch.isForeground()) {
+                String outcome = MayaBackgroundLaunch.notifyLaunch(context, label, packageName, activityName);
+                if ("posted".equals(outcome))
+                    return result("background", "Maya is in the background; tap the notification to open " + label + ".").toString();
+                return result("notification_blocked", "Maya needs notification permission to open apps while it is in the background.").toString();
+            }
             context.startActivity(launch);
             return result("launched", "Android launch intent requested for " + label + ".").toString();
         } catch (SecurityException error) {

@@ -104,6 +104,8 @@ export function nativeOpen(selected){
   if(!selected||!selected.packageName||!selected.activityName)throw Error('Select an installed app first.');
   const raw=nativeBridge().launchListedApp(selected.packageName,selected.activityName),response=JSON.parse(raw);
   if(response?.status==='launched')return 'Android launch requested: '+selected.label+'.';
+  if(response?.status==='background')return 'ব্যাকগ্রাউন্ড লঞ্চ: "'+selected.label+'" খুলতে নোটিফিকেশনে ট্যাপ করো।';
+  if(response?.status==='notification_blocked')return 'App not opened: মায়া-র নোটিফিকেশন পারমিশন চালু করো (Settings → Apps → Maya → Notifications) — তাহলে মায়া ব্যাকগ্রাউন্ডে থাকলেও নোটিফিকেশনে ট্যাপ করে অ্যাপ খোলা যাবে।';
   return 'App not opened: '+String(response?.message||'Android declined.');
  }catch(e){return 'App not opened: '+String(e?.message||e);}
 }
@@ -159,9 +161,10 @@ function mount(){
  input.placeholder='Installed app name (e.g. WhatsApp)';
  const open=document.createElement('button');open.textContent='Open by name';open.className='btn pri';
  const list=document.createElement('button');list.textContent='Find installed apps';list.className='btn';
+ const bgNotify=document.createElement('button');bgNotify.id='mayaAppBgNotify';bgNotify.textContent='ব্যাকগ্রাউন্ড লঞ্চ নোটিফিকেশন চালু করো';bgNotify.className='btn';
  const count=document.createElement('p');count.id='mayaAppStatus';count.setAttribute('role','status');
  const suggestions=document.createElement('div');suggestions.id='mayaAppList';
- wrap.append(note,input,open,list,count,suggestions);
+ wrap.append(note,input,open,list,bgNotify,count,suggestions);
  block.append(opener,wrap);host.append(block);
  const overlay=document.createElement('section');overlay.id='mayaAppChooser';overlay.hidden=true;
  overlay.style.cssText='position:fixed;z-index:100800;left:5%;right:5%;top:14%;max-height:70vh;overflow:auto;padding:14px;color:white;background:#111b30;border:1px solid #7199ff;border-radius:14px;box-shadow:0 12px 35px #000b';
@@ -188,6 +191,17 @@ function mount(){
  }
  opener.onclick=()=>{wrap.hidden=!wrap.hidden;if(!wrap.hidden)render();};
  list.onclick=render;
+ bgNotify.onclick=()=>{
+  const bridge=typeof window!=='undefined'?window.MayaBridge:null;
+  if(typeof bridge?.requestLaunchNotifications!=='function')return say('নতুন Maya APK লাগবে (এই ফিচারটি ব্রাউজারে নেই)।');
+  try{
+   const response=JSON.parse(bridge.requestLaunchNotifications());
+   if(response?.status==='granted')say('নোটিফিকেশন চালু আছে — ব্যাকগ্রাউন্ডেও অ্যাপ খোলার নোটিফিকেশন আসবে।');
+   else if(response?.status==='requested')say('নোটিফিকেশন পারমিশনের অনুরোধ পাঠানো হয়েছে — Allow চেপে চালু করো।');
+   else if(response?.status==='blocked')say('নোটিফিকেশন বন্ধ আছে — Settings → Apps → Maya → Notifications থেকে চালু করো।');
+   else say('এখন পারমিশন চাওয়া যায়নি; মায়া খোলা অবস্থায় আবার চাপো।');
+  }catch(e){say('নোটিফিকেশন পারমিশন চাওয়া যায়নি: '+String(e?.message||e));}
+ };
  open.onclick=async()=>{if(!input.value.trim())return say('Enter an app name first.');say(await openNamedApp(input.value.trim()));};
  input.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();open.click();}});
 }

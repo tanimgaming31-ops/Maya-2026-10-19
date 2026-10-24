@@ -20,6 +20,7 @@ on:
       - 'tests/**'
       - 'native-screenshot/**'
       - 'native-life/**'
+      - 'native-app-launcher/**'
       - 'scripts/**'
 
 permissions:
@@ -65,6 +66,8 @@ jobs:
           test -s maya-features/smart-hub.js
           test -s maya-features/app-launcher.js
           test -s native-app-launcher/MayaAppCatalog.java
+          test -s native-app-launcher/MayaBackgroundLaunch.java
+          test -s native-app-launcher/maya_launch_notify.xml
           test -s scripts/install-app-launcher.py
           test -s tests/app-launcher.test.mjs
           test -s tests/app-launcher-native-check.py
