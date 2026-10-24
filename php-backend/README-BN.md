@@ -89,7 +89,7 @@ For any backup transfer, user must explicitly opt in. Never put backend token in
 - [x] No original Maya source edited by this branch.
 - [x] API implemented as opt-in separate files, designed for server-side encryption.
 - [x] Test script added for authentication, wrong CORS origin, memory query, backup, restricted plans, document text search, consent draft, safe native suggestions, failure reporting, cron one-shot and ciphertext.
-- [ ] GitHub Actions PHP CI passes (check actual run).
+- [x] GitHub Actions PHP CI passed on branch: https://github.com/tanimgaming31-ops/Maya-2026-10-19/actions/runs/40081665903 (PHP smoke tests only).
 - [ ] Live HTTPS PHP host verified.
 - [ ] Phone Maya integration tested.
 - [ ] Android notification/voice/native bridge tested.
