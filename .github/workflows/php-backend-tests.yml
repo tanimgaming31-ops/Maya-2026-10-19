@@ -22,5 +22,7 @@ jobs:
         with:
           php-version: '8.2'
           extensions: openssl
+      - name: Validate optional client adapter syntax
+        run: node --check php-backend/client/maya-backend.mjs
       - name: Integration smoke tests
         run: bash php-backend/tests/smoke.sh
