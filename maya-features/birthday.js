@@ -5,6 +5,7 @@ import {readBirthday,saveBirthday,importBirthdayRecord,birthdayAge,birthdayAnswe
 const LAST='maya.birthday.lastCelebration.v1';
 const $=id=>document.getElementById(id);
 const get=()=>readBirthday(localStorage);
+const age=()=>birthdayAge(new Date(),get());
 const speakText=text=>{
  const w=typeof window!=='undefined'?window:null;
  if(!w||!('speechSynthesis' in w)||typeof SpeechSynthesisUtterance==='undefined')return false;
@@ -28,7 +29,7 @@ function heartAnimation(){
  }catch{}
  const wrap=document.createElement('div');wrap.setAttribute('aria-hidden','true');wrap.className='maya-birthday-confetti';
  wrap.style.cssText='pointer-events:none;position:fixed;inset:0;z-index:120000;overflow:hidden';
- if(matchMedia?.('(prefers-reduced-motion: reduce)')?.matches){wrap.remove();return;}
+ if(typeof matchMedia==='function'&&matchMedia('(prefers-reduced-motion: reduce)').matches){wrap.remove();return;}
  for(let i=0;i<22;i++){
   const el=document.createElement('span');
   el.textContent=i%4===0?'🎂':i%3===0?'✨':'💗';
@@ -120,6 +121,6 @@ export function restoreBirthdayFromBackup(record){
  importBirthdayRecord(record,localStorage);status();return true;
 }
 if(typeof window!=='undefined'){
- window.MayaBirthdayInfo={get,backupRecord:get,restoreFromBackup:restoreBirthdayFromBackup,reply:birthdayReply,parse:parseBirthdayQuestion};
+ window.MayaBirthdayInfo={get,age,validate:validBirthday,backupRecord:get,restoreFromBackup:restoreBirthdayFromBackup,reply:birthdayReply,parse:parseBirthdayQuestion};
  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',mount,{once:true});else mount();
 }
