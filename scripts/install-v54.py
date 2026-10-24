@@ -27,16 +27,13 @@ if 'public String v54(String action, String json)' not in s:
     s=s.replace(anchor,addon+anchor,1)
     bridge.write_text(s,encoding='utf-8')
 s=main.read_text(encoding='utf-8')
-needle='    @Override\n    protected void onNewIntent(Intent intent) {'
-method='''    @Override
-    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
-        MayaV54Files.accept(this, requestCode, resultCode, data);
-        super.onActivityResult(requestCode, resultCode, data);
-    }
-
-'''
-if 'MayaV54Files.accept(this, requestCode, resultCode, data)' not in s:
-    if s.count(needle)!=1:
-        raise SystemExit('MainActivity onNewIntent anchor changed')
-    main.write_text(s.replace(needle,method+needle,1),encoding='utf-8')
+# setup-native.sh already installs Maya V5 onActivityResult for contact picking.
+# Chain V54's SAF result into that existing override rather than adding a duplicate.
+call='MayaV54Files.accept(this, requestCode, resultCode, data);'
+anchor='        MayaV5Controls.onPickResult(this,requestCode,resultCode,data);'
+if call not in s:
+    if s.count(anchor)!=1:
+        raise SystemExit('Existing Maya V5 onActivityResult handler not found')
+    s=s.replace(anchor,'        '+call+'\n'+anchor,1)
+    main.write_text(s,encoding='utf-8')
 print('Maya V54 scoped SAF and native facade installed; existing notifications, Android macros, and persistent reminders reused.')
