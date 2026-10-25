@@ -3,7 +3,7 @@ name: Build Maya APK
 on:
   workflow_dispatch:
   push:
-    branches: [main, feature/maya-local-phone-tools-20261026]
+    branches: [main]
     paths:
       - '.github/workflows/build-apk.yml'
       - 'maya-v18-runtime.js'
@@ -274,7 +274,6 @@ jobs:
         run: ./gradlew assembleDebug --no-daemon
 
       - name: Publish matching PWA icons to GitHub Pages source
-        if: github.ref == 'refs/heads/main'
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
@@ -291,7 +290,6 @@ jobs:
           path: android/app/build/outputs/apk/debug/app-debug.apk
 
       - name: Publish a download link (GitHub Release)
-        if: github.ref == 'refs/heads/main'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
