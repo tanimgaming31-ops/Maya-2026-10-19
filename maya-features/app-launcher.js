@@ -24,7 +24,11 @@ export function parseOpenAppCommand(raw){
  const t=String(raw||'').normalize('NFKC').replace(/[।!?]+$/gu,'').trim();
  let install=t.match(/^(?:install|download)\s+(?:the\s+)?(?:app\s+)?(.+?)(?:\s+app)?$/iu);
  if(!install)install=t.match(/^(.+?)\s+(?:ইনস্টল করো|ইনস্টল করে দাও|ডাউনলোড করো|ইনস্টল)$/u);
- if(install)return {kind:'appLaunch',name:'play store'};
+ if(install){
+  const name=String(install[1]).trim().replace(/^[“"'‘]+|[”"'’]+$/gu,'').trim();
+  if(name.length<2||name.length>100||!targetName(name)||/https?:\/\/|[\r\n]/iu.test(name))return null;
+  return {kind:'appInstall',name};
+ }
  let m=t.match(/^(?:open|launch|start|run)\s+(?:(?:the|my)\s+)?(?:app\s+)?(.+?)(?:\s+app)?$/iu);
  if(!m)m=t.match(/^(.+?)\s+(?:খোলো|খুলে দাও|খুলে দিও|চালু করো|চালু করে দাও|ওপেন করো|ওপেন করে দাও)$/u);
  if(!m)return null;
@@ -46,7 +50,7 @@ export function rankedMatches(query,apps){
   else if(label.includes(' '+target+' ')||label.endsWith(' '+target))score=80;
   if(score)scored.push({...a,score});
  }
- return scored.sort((a,b)=>b.score-a.score||a.label.localeCompare(a.label)||a.packageName.localeCompare(b.packageName)).slice(0,30);
+ return scored.sort((a,b)=>b.score-a.score||a.label.localeCompare(b.label)||a.packageName.localeCompare(b.packageName)).slice(0,30);
 }
 export function suggestAppMatches(rawQuery,apps){
  if(!Array.isArray(apps))return [];
@@ -63,7 +67,7 @@ export function suggestAppMatches(rawQuery,apps){
   const sim=similarity(target,label);
   if(sim>=0.7)close.push({...a,score:sim});
  }
- return close.sort((a,b)=>b.score-a.score||a.label.localeCompare(a.label)||a.packageName.localeCompare(b.packageName)).slice(0,3);
+ return close.sort((a,b)=>b.score-a.score||a.label.localeCompare(b.label)||a.packageName.localeCompare(b.packageName)).slice(0,3);
 }
 function similarity(a,b){
  const n=a.length,m=b.length;
@@ -75,7 +79,7 @@ function levenshtein(a,b){
  if(!a.length)return b.length;
  if(!b.length)return a.length;
  let prev=Array.from({length:b.length+1},(_,j)=>j);
- for(let i=1;i<=b.length;i++){
+ for(let i=1;i<=a.length;i++){
   const cur=[i];
   for(let j=1;j<=b.length;j++)
    cur[j]=Math.min(prev[j]+1,cur[j-1]+1,prev[j-1]+(a.charCodeAt(i-1)===b.charCodeAt(j-1)?0:1));
