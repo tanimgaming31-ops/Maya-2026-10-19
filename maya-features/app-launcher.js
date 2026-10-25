@@ -100,6 +100,42 @@ export function installedApps(){
  if(obj?.status!=='ok'||!Array.isArray(obj.apps))throw Error(String(obj?.message||'Could not read Android launcher apps.'));
  return obj.apps.filter(a=>a&&typeof a.label==='string'&&typeof a.packageName==='string'&&typeof a.activityName==='string').slice(0,1200);
 }
+/* Documented Google Play links. Opening a listing is NOT an app installation. */
+const knownStorePackages={
+ 'whatsapp':'com.whatsapp',
+ 'whatsapp business':'com.whatsapp.w4b',
+ 'imo':'com.imo.android.imoim',
+ 'messenger':'com.facebook.orca',
+ 'instagram':'com.instagram.android',
+ 'telegram':'org.telegram.messenger',
+ 'youtube':'com.google.android.youtube',
+ 'maps':'com.google.android.apps.maps',
+ 'chrome':'com.android.chrome'
+};
+export function playStoreUrlForApp(name){
+ const raw=String(name||'').trim();
+ if(raw.length<2||raw.length>100||/[\r\n]/u.test(raw)||/https?:\/\//iu.test(raw))return null;
+ const canonical=targetName(raw);
+ if(!canonical||/^[a-z0-9_]+(?:\.[a-z0-9_]+)+$/iu.test(canonical))return null;
+ const packageName=knownStorePackages[canonical];
+ return packageName
+  ?'https://play.google.com/store/apps/details?id='+packageName
+  :'https://play.google.com/store/search?q='+encodeURIComponent(raw)+'&c=apps';
+}
+export async function openPlayStoreForApp(name){
+ const url=playStoreUrlForApp(name);
+ if(!url)return 'Play Store request cancelled: enter a valid app name.';
+ try{
+  const b=typeof window!=='undefined'?window.MayaBridge:null;
+  if(typeof b?.control!=='function')
+   return 'Play Store request requires Maya Android APK. No installation was attempted.';
+  const out=JSON.parse(b.control('OPEN_URL',JSON.stringify({url,pkg:'com.android.vending'})));
+  if(out?.status!=='opened')
+   return 'Play Store did not open: '+String(out?.message||'Android blocked the link.');
+  const kind=url.includes('/details?id=')?'listing':'search';
+  return 'Google Play '+kind+' requested for '+String(name).slice(0,100)+'. Check the app identity and tap Install yourself. No app was installed by Maya.';
+ }catch(e){return 'Play Store request failed: '+String(e?.message||e);}
+}
 export function nativeOpen(selected){
  try{
   if(!selected||!selected.packageName||!selected.activityName)throw Error('Select an installed app first.');
@@ -157,15 +193,16 @@ function mount(){
  opener.textContent='Installed Apps • Open by Name';
  const wrap=document.createElement('section');wrap.hidden=true;
  const note=document.createElement('p');note.className='note';
- note.textContent='Open installed apps from Maya. Say "Maya, open WhatsApp" / "মায়া, ইমো খোলো" in Maya Voice Call, or type in chat. Say "Maya, install WhatsApp" to open Play Store. Enable Unified Life Voice in Settings. Android system may hide some apps or separate work profiles. No QUERY_ALL_PACKAGES.';
+ note.textContent='Open installed apps from Maya. Say "Maya, open WhatsApp" / "মায়া, ইমো খোলো" in Maya Voice Call, or type in chat. Say "Maya, install WhatsApp" to open the matching Play Store listing (you must tap Install yourself). Enable Unified Life Voice in Settings. Android system may hide some apps or separate work profiles. No QUERY_ALL_PACKAGES.';
  const input=document.createElement('input');input.id='mayaAppName';input.className='inp wide';input.maxLength=100;
  input.placeholder='Installed app name (e.g. WhatsApp)';
  const open=document.createElement('button');open.textContent='Open by name';open.className='btn pri';
  const list=document.createElement('button');list.textContent='Find installed apps';list.className='btn';
+ const store=document.createElement('button');store.textContent='Find in Google Play';store.className='btn';
  const bgNotify=document.createElement('button');bgNotify.id='mayaAppBgNotify';bgNotify.textContent='ব্যাকগ্রাউন্ড লঞ্চ নোটিফিকেশন চালু করো';bgNotify.className='btn';
  const count=document.createElement('p');count.id='mayaAppStatus';count.setAttribute('role','status');
  const suggestions=document.createElement('div');suggestions.id='mayaAppList';
- wrap.append(note,input,open,list,bgNotify,count,suggestions);
+ wrap.append(note,input,open,store,list,bgNotify,count,suggestions);
  block.append(opener,wrap);host.append(block);
  const overlay=document.createElement('section');overlay.id='mayaAppChooser';overlay.hidden=true;
  overlay.style.cssText='position:fixed;z-index:100800;left:5%;right:5%;top:14%;max-height:70vh;overflow:auto;padding:14px;color:white;background:#111b30;border:1px solid #7199ff;border-radius:14px;box-shadow:0 12px 35px #000b';
@@ -204,6 +241,7 @@ function mount(){
   }catch(e){say('নোটিফিকেশন পারমিশন চাওয়া যায়নি: '+String(e?.message||e));}
  };
  open.onclick=async()=>{if(!input.value.trim())return say('Enter an app name first.');say(await openNamedApp(input.value.trim()));};
+ store.onclick=async()=>{if(!input.value.trim())return say('Enter an app name first.');say(await openPlayStoreForApp(input.value.trim()));};
  input.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();open.click();}});
 }
 if(typeof document!=='undefined'){if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',mount,{once:true});else mount();}
