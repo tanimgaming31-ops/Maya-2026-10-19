@@ -21,6 +21,15 @@ addition='''              case "LOCAL_DEVICE":
 if 'MayaLocalTools.run(ctx,act,action,input)' not in s:
     assert s.count(anchor)==1, 'Maya V54 native bridge changed'
     bridge.write_text(s.replace(anchor,addition+anchor),encoding='utf-8')
+# Reuse the EXISTING "Maya" wake-word voice service. Do not create another listener.
+voice=root/'java/com/tanim/maya/MayaV4Controls.java'
+assert voice.is_file(), 'Maya V4 background voice missing'
+v=voice.read_text(encoding='utf-8')
+anchor_voice='        if (MayaV9Tools.voice(ctx, words)) return;'
+call='        if (MayaLocalTools.voice(ctx,words)) return;\n'
+if call not in v:
+    assert v.count(anchor_voice)==1, 'Maya V9 voice chain changed'
+    voice.write_text(v.replace(anchor_voice,call+anchor_voice,1),encoding='utf-8')
 s=manifest.read_text(encoding='utf-8')
 p='<uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />'
 if p not in s:

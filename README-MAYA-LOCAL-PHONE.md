@@ -10,7 +10,7 @@ the original `index.html`, the Maya persona, API settings and Memory Packs.
 - Read up to 64 KiB UTF-8 .txt files inside a user-approved Android folder
 - Delete one named .txt file only after both a web UI approval and an **Android native confirmation**
 - Foreground typed/voice commands for status, volume, torch (enable Unified Life Voice)
-- Settings > Maya · PC-free Phone Tools panel
+- Unified voice routing inside Maya's **existing** call/text chat (no separate Phone Tools UI)
 
 ## Already in Maya and reused
 Flashlight, APK app launcher, HTTPS URL opening, Android folder chooser/list,
@@ -30,3 +30,6 @@ preserve local data without uninstalling. Export Maya Memory first.
 The JS parsing/safety tests are in `tests/local-tools.test.mjs` and
 execute in the workflow. Actual Android hardware, folder grants and audio
 behaviour still require on-device testing.
+
+## Integrated voice behavior
+Say “Maya, Wi-Fi status”, “Maya, volume 50 percent”, “মায়া, ফোনের তথ্য”, “Maya, read file notes.txt”, or “Maya, choose folder” directly in Maya's ordinary call or text chat. Phone commands do not require switching to another panel or toggling Life Voice; Android microphone/voice recognition must work. Existing message, YouTube, app-launch, screenshot, and memory routes remain as they were. The existing native background listener also recognizes local device/Wi-Fi/volume queries, but Android recognition and background service availability vary. File deletion always requires an Android on-screen confirmation, and the file picker also requires foreground activity. Never claim a requested file action completed until Android reports it.
