@@ -55,6 +55,11 @@ public final class MayaAutoReply {
         }catch(Exception ignored){return new JSONArray();}
     }
     private static long today(){return System.currentTimeMillis()/86400000L;}
+    // Diagnostics contain NO private incoming text or sender identity.
+    // Report the actual gate that stopped a reply, not just a generic success claim.
+    private static void note(SharedPreferences p,String code) {
+        p.edit().putString("last",code).putLong("lastTime",System.currentTimeMillis()).apply();
+    }
     /** One source of truth: Android app local private preferences (no localStorage-only enable). */
     public static synchronized String control(Context c,String action,String payload){
         SharedPreferences prefs=c.getSharedPreferences(PREF,0);
@@ -67,12 +72,15 @@ public final class MayaAutoReply {
                    .put("listenerConnected",MayaNotificationService.connected)
                    .put("sentToday",prefs.getLong("day",0)==today()?prefs.getInt("count",0):0)
                    .put("lastOutcome",prefs.getString("last","No automatic reply attempted."))
+                   .put("lastOutcomeTime",prefs.getLong("lastTime",0L))
                    .put("deliveryVerified",false);
                 return out.toString();
             }
             if("SET_ENABLED".equals(action)){
                 boolean on=in.optBoolean("enabled",false);
                 if(on&&rules(prefs).length()==0)return error("needs_rule","Save an approved contact reply rule first.");
+                if(on&&!MayaNotificationService.connected)
+                    return error("needs_access","Maya Notification Listener is not connected; enable Maya Notification Access in Android Settings.");
                 prefs.edit().putBoolean(K_ON,on).apply();
                 return error("ok",on?"Automatic replies enabled for saved exact-contact rules.":"Automatic replies OFF.");
             }
@@ -124,7 +132,12 @@ public final class MayaAutoReply {
         Bundle e=n.extras;
         if(e==null)return true;
         if(e.getBoolean("android.isGroupConversation",false))return true;
-        if(e.getCharSequence(Notification.EXTRA_CONVERSATION_TITLE)!=null)return true;
+        // On Android some *direct* conversations include a conversation title.
+        // Only a different group title is enough to prove a group; if the
+        // MessagingStyle's sender differs, the original listener attaches
+        // "(sender)" to m.sender and that still fails closed below.
+        CharSequence conversation=e.getCharSequence(Notification.EXTRA_CONVERSATION_TITLE);
+        if(conversation!=null&&!normalize(conversation.toString()).equals(normalize(title)))return true;
         return title==null||title.contains("(")||title.contains(")")||title.contains("@");
     }
     private static Notification.Action replyAction(Notification n){
@@ -143,38 +156,50 @@ public final class MayaAutoReply {
     static synchronized void onMessage(Context c, StatusBarNotification sbn, MayaNotificationService.Msg m){
         SharedPreferences p=c.getSharedPreferences(PREF,0);
         if(!p.getBoolean(K_ON,false))return;
-        if(!allowedPackage(sbn.getPackageName())||m==null||m.action==null)return;
+        if(!allowedPackage(sbn.getPackageName()))return;
+        if(m==null||m.action==null){note(p,"NO_QUICK_REPLY: App notification did not expose an Android Reply action.");return;}
         Notification n=sbn.getNotification();
-        if(n==null||isGroup(n,m.sender)||forbiddenIncoming(m.text))return;
-        if(!safeSender(m.sender)||replyAction(n)==null)return;
+        if(n==null){note(p,"NO_NOTIFICATION: Android notification was removed.");return;}
+        if(isGroup(n,m.sender)){note(p,"GROUP_OR_AMBIGUOUS_SENDER: Refused to reply for safety.");return;}
+        if(forbiddenIncoming(m.text)){note(p,"SENSITIVE_OR_UNCLEAR: Ignored a private, security, or unclear notification.");return;}
+        if(!safeSender(m.sender)){note(p,"INVALID_SENDER: Notification sender name is ambiguous.");return;}
+        if(replyAction(n)==null){note(p,"NO_QUICK_REPLY: No usable Android free-text reply.");return;}
         long now=System.currentTimeMillis();
-        if(Math.abs(now-sbn.getPostTime())>120000L)return; // no reply to stale notifications
+        if(Math.abs(now-sbn.getPostTime())>120000L){note(p,"STALE: Ignored an old notification.");return;} // no reply to stale notifications
         long day=today();int count=p.getLong("day",0L)==day?p.getInt("count",0):0;
-        if(count>=MAX_PER_DAY)return;
+        if(count>=MAX_PER_DAY){note(p,"DAILY_LIMIT: Maximum 15 auto-replies reached.");return;}
         JSONArray list=rules(p);
+        boolean matched=false;
         for(int i=0;i<list.length();i++){
             JSONObject r=list.optJSONObject(i);
             if(r==null||!sbn.getPackageName().equals(r.optString("package"))
                   ||!normalize(m.sender).equals(normalize(r.optString("sender"))))continue;
+            matched=true;
             String tag="rule_"+Integer.toHexString((sbn.getPackageName()+"\n"+normalize(m.sender)).hashCode());
             long last=p.getLong(tag+"_at",0),lastDay=p.getLong(tag+"_day",0);
             int sentToday=lastDay==day?p.getInt(tag+"_count",0):0;
-            if(last>0&&now-last<COOLDOWN_MS||sentToday>=MAX_PER_RULE_DAY)return;
+            if(last>0&&now-last<COOLDOWN_MS||sentToday>=MAX_PER_RULE_DAY){
+                note(p,"COOLDOWN: Already replied recently or daily contact limit reached.");return;
+            }
             // Avoid repeated notifications or app re-posts of the same message content.
             String fingerprint=Integer.toHexString((sbn.getKey()+"|"+m.text+"|"+sbn.getPostTime()).hashCode());
-            if(fingerprint.equals(p.getString(tag+"_fingerprint","")))return;
-            if(r.optLong("addedAt",0L)>sbn.getPostTime())return;
+            if(fingerprint.equals(p.getString(tag+"_fingerprint",""))){
+                note(p,"DUPLICATE: Notification update ignored.");return;
+            }
+            if(r.optLong("addedAt",0L)>sbn.getPostTime()){
+                note(p,"OLDER_THAN_RULE: Message arrived before approval.");return;
+            }
             String body=r.optString("reply","").trim();
-            if(!safeReply(body))return;
+            if(!safeReply(body)){note(p,"UNSAFE_TEMPLATE: Saved reply was rejected.");return;}
             Notification.Action action=replyAction(n);
             RemoteInput[] inputs=action.getRemoteInputs();
-            if(inputs==null||inputs.length==0)return;
+            if(inputs==null||inputs.length==0){note(p,"NO_QUICK_REPLY: Android did not provide reply input.");return;}
             String actual=body+SUFFIX;
             try{
                 Intent intent=new Intent();Bundle data=new Bundle();
                 for(RemoteInput input:inputs)if(input!=null&&input.getAllowFreeFormInput())
                     data.putCharSequence(input.getResultKey(),actual);
-                if(data.isEmpty())return;
+                if(data.isEmpty()){note(p,"NO_QUICK_REPLY: Android denied free-text input.");return;}
                 RemoteInput.addResultsToIntent(inputs,intent,data);
                 action.actionIntent.send(c,0,intent);
                 // Android accepted PendingIntent, NOT a WhatsApp/IMO delivery receipt.
@@ -182,14 +207,15 @@ public final class MayaAutoReply {
                  .putLong(tag+"_at",now).putLong(tag+"_day",day)
                  .putInt(tag+"_count",sentToday+1)
                  .putString(tag+"_fingerprint",fingerprint)
-                 .putString("last","Android Quick Reply intent submitted (delivery unverified).")
-                 .apply();
+                 .putString("last","SUBMITTED: Android Quick Reply intent submitted. Delivery not independently verified.")
+                 .putLong("lastTime",now).apply();
             }catch(PendingIntent.CanceledException e){
-                p.edit().putString("last","Notification reply action expired; no reply submitted.").apply();
+                note(p,"EXPIRED: Notification reply action expired; nothing submitted.");
             }catch(Exception e){
-                p.edit().putString("last","Android Quick Reply failed; no confirmed send.").apply();
+                note(p,"ANDROID_ERROR: Android Quick Reply failed; delivery unverified.");
             }
             return;
         }
+        if(!matched)note(p,"NO_RULE_MATCH: Exact messaging app and sender must match your saved rule. No reply sent.");
     }
 }
