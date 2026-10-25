@@ -85,8 +85,14 @@ export function readableDiagnostics(r){
   'Android SDK '+r.androidSdk,
   'Voice screenshot: '+(r.voiceScreenshotOptIn?'enabled':'OFF'),
   'Maya Accessibility: '+(r.accessibilityConnected?'connected':'OFF'),
-  'Android screenshot capability: '+(r.screenshotCapability?'YES':'NO')
+  'Android screenshot capability: '+(r.screenshotCapability?'YES':'NO'),
+  'Background microphone service: '+(r.backgroundVoiceRunning?'RUNNING':'OFF'),
+  'Last native screenshot voice recognized: '+(r.lastRecognizedScreenshot?
+    new Date(r.lastRecognizedScreenshot).toLocaleString():'NEVER')
  ];
+ if(r.lastRecognizedScreenshot)fields.push('Last command: '+String(r.lastVoiceActionResult||'Unknown').slice(0,300));
+ if(!r.backgroundVoiceRunning)fields.push('To capture another app by voice, open original Maya V4 Controls and press Start background voice before switching apps. Keep Android microphone permission enabled.');
+
  return fields.join(' · ')+'. '+(r.message||'');
 }
 async function play(query){
@@ -118,6 +124,7 @@ function mount(){
  '<label><input id="mayaVoiceScreenshotEnable" type="checkbox"> Enable one-command voice screenshot</label>',
  '<div class="krow"><button class="btn" id="mayaMediaAccess">Enable Maya Accessibility</button><button class="btn" id="mayaMediaCapture">Screenshot now</button><button class="btn" id="mayaMediaStatus">Check Gallery save</button></div>',
  '<button class="btn" id="mayaMediaDiag">Diagnose Android Screenshot Permissions</button>',
+ '<p class="note">For a screenshot WHILE ANOTHER APP is open: open Maya V4 → Start background voice first (microphone foreground notification must appear). Then open the app and speak “Maya screenshot”. Normal Gemini Live in Maya cannot listen after switching to another app. Native microphone may stop under Android power limits.</p>',
  '<div class="krow"><button class="btn" id="mayaMediaConsent">Fallback: Android screen-sharing permission prompt</button></div>',
  '<p class="note">Fallback needs you to approve Android Screen Sharing each time. Use it when Android Accessibility screenshot is blocked or unavailable. Protected content cannot be captured.</p>',
  '<p class="note">If screenshot permission is NO even after enabling Accessibility, switch Maya Screen Controls OFF then ON again in Android Settings. Do not turn on Accessibility for unknown apps.</p>',
