@@ -22,6 +22,7 @@ on:
       - 'native-life/**'
       - 'native-app-launcher/**'
       - 'native-v54/**'
+      - 'native-local/**'
       - 'native-voice-media/**'
       - 'native-auto-reply/**'
       - 'scripts/**'
@@ -72,6 +73,9 @@ jobs:
           test -s scripts/install-v54.py
           test -s native-v54/MayaV54Bridge.java
           test -s native-v54/MayaV54Files.java
+          test -s native-local/MayaLocalTools.java
+          test -s maya-features/local-tools.js
+          test -s scripts/install-local-tools.py
           test -s native-v54/MayaV54Macro.java
           test -s maya-features/advanced-loader.js
           test -s maya-features/life-suite.js
@@ -138,6 +142,7 @@ jobs:
           python3 tests/app-launcher-native-check.py
           python3 tests/life-native-check.py
           node tests/voice-screenshot.test.cjs
+          node tests/local-tools.test.mjs
           node tests/media-voice.test.mjs
           node tests/auto-reply.test.mjs
           python3 tests/native-screenshot-check.py
@@ -189,6 +194,7 @@ jobs:
           test -s www/maya-features/voice-media.js
           test -s www/maya-features/voice-media-bridge.js
           test -s www/maya-features/v54-suite.js
+          test -s www/maya-features/local-tools.js
           test -s www/maya-features/v54-voice.js
           test -s www/maya-features/v54-voice-bridge.js
           test -s www/maya-features/productivity.js
@@ -224,6 +230,7 @@ jobs:
           python3 scripts/install-life-native.py
           python3 scripts/install-app-launcher.py
           python3 scripts/install-v54.py
+          python3 scripts/install-local-tools.py
           python3 scripts/install-voice-media.py
           python3 scripts/install-auto-reply.py
           grep -Fq 'public String autoReply(String action, String json)' android/app/src/main/java/com/tanim/maya/MayaBridge.java
@@ -235,6 +242,8 @@ jobs:
           grep -Fq 'public String v54(String action, String json)' android/app/src/main/java/com/tanim/maya/MayaBridge.java
           grep -Fq 'MayaV54Files.accept(this, requestCode, resultCode, data)' android/app/src/main/java/com/tanim/maya/MainActivity.java
           test -s android/app/src/main/java/com/tanim/maya/MayaV54Macro.java
+          test -s android/app/src/main/java/com/tanim/maya/MayaLocalTools.java
+          grep -Fq 'MayaLocalTools.run(ctx,act,action,input)' android/app/src/main/java/com/tanim/maya/MayaV54Bridge.java
           grep -Fq 'public String listLaunchableApps()' android/app/src/main/java/com/tanim/maya/MayaBridge.java
           grep -Fq 'public String launchListedApp(' android/app/src/main/java/com/tanim/maya/MayaBridge.java
           test -s android/app/src/main/java/com/tanim/maya/MayaAppCatalog.java
