@@ -16,6 +16,7 @@ import './birthday.js';
 import './birthday-voice.js';
 import './voice-media.js';
 import './voice-media-bridge.js';
+import './auto-reply.js';
 function init(){
   const host=document.querySelector('#setSheet .body');
   if(!host||document.getElementById('mayaAdvancedLink'))return;
