@@ -62,6 +62,44 @@ public final class MayaLocalTools {
         }
         return match;
     }
+    /** Existing Android background listener routes only exact, non-destructive speech here.
+     * Screen access, file deletion and folder permission must remain foreground-only. */
+    static boolean voice(Context ctx, String words) {
+        if(words==null)return false;
+        String s=words.trim().toLowerCase(java.util.Locale.ROOT).replaceAll("[।!?.,]+$","").trim();
+        for(int i=0;i<10;i++)s=s.replace((char)('০'+i),(char)('0'+i));
+        String action=null;JSONObject input=new JSONObject();
+        if(s.matches("^(?:device info|phone info|ফোনের তথ্য|ফোনের ইনফো)$"))action="LOCAL_DEVICE";
+        else if(s.matches("^(?:wi-?fi status|check wi-?fi|ওয়াইফাই স্ট্যাটাস|ওয়াইফাই স্ট্যাটাস)$"))action="LOCAL_WIFI";
+        else if(s.matches("^(?:volume status|check volume|ভলিউম কত|media volume)$"))action="LOCAL_VOLUME_GET";
+        else {
+            java.util.regex.Matcher vol=java.util.regex.Pattern
+                .compile("^(?:(?:set )?(?:media )?volume (?:to )?(\\d{1,3})(?:\\s*(?:percent|%))?|(?:ভলিউম|মিডিয়া ভলিউম|মিডিয়া ভলিউম)\\s*(\\d{1,3})\\s*(?:পারসেন্ট|%|এ)?\\s*(?:করো|দাও|সেট করো))$")
+                .matcher(s);
+            if(vol.matches()) {
+                String n=vol.group(1)!=null?vol.group(1):vol.group(2);
+                try { int value=Integer.parseInt(n); if(value<0||value>100){MayaV8Tools.speak(ctx,"Volume must be between zero and one hundred.");return true;}
+                    input.put("percent",value); action="LOCAL_VOLUME_SET";
+                } catch(Exception e) {MayaV8Tools.speak(ctx,"I could not understand the volume value.");return true;}
+            }
+        }
+        if(action==null)return false; // V8/V9 and existing commands keep their old route.
+        try {
+            JSONObject r=new JSONObject(run(ctx,null,action,input));
+            if(!"ok".equals(r.optString("status"))) {MayaV8Tools.speak(ctx,r.optString("message","Phone action unavailable."));return true;}
+            String message=r.optString("message","");
+            if("LOCAL_DEVICE".equals(action))message="Phone "+r.optString("model","")+
+                ", Android "+r.optString("android","")+
+                (r.has("batteryPercent")?", battery "+r.optInt("batteryPercent")+" percent.":".");
+            else if("LOCAL_WIFI".equals(action))message=r.optBoolean("wifiConnected")
+                ?"Wi-Fi is connected.":r.optBoolean("cellularConnected")?"Using mobile data, not Wi-Fi.":"Wi-Fi is not the active connection.";
+            else if("LOCAL_VOLUME_GET".equals(action)||"LOCAL_VOLUME_SET".equals(action))
+                message="Media volume is "+r.optInt("percent")+" percent.";
+            MayaV8Tools.speak(ctx,message);
+        } catch(Exception e){MayaV8Tools.speak(ctx,"Android local phone command failed.");}
+        return true;
+    }
+
     public static String run(Context ctx, Activity act, String action, JSONObject args) {
         try {
             switch (action) {

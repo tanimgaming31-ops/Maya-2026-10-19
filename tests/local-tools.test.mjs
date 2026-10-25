@@ -1,23 +1,36 @@
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
-const script=readFileSync(new URL('../maya-features/local-tools.js',import.meta.url),'utf8');
-const mod=await import('data:text/javascript;base64,'+Buffer.from(script).toString('base64'));
-for(const [v,action] of [['Maya device info','LOCAL_DEVICE'],['মায়া ফোনের তথ্য','LOCAL_DEVICE'],
- ['Maya wifi status','LOCAL_WIFI'],['Maya check volume','LOCAL_VOLUME_GET'],
- ['Maya torch on','FLASHLIGHT_ON'],['Maya torch off','FLASHLIGHT_OFF'],
- ['Maya set volume to 75 percent','LOCAL_VOLUME_SET']]){
- assert.equal(mod.parseLocalVoice(v)?.action,action,v);
-}
-assert.equal(mod.parseLocalVoice('Maya set volume to 75 percent').percent,75);
-for(const v of ['Maya set volume to 110','Maya delete file other.txt','Maya unlock phone','check wifi']){
- assert.equal(mod.parseLocalVoice(v),null,v);
-}
+const js=readFileSync(new URL('../maya-features/local-tools.js',import.meta.url),'utf8');
+const m=await import('data:text/javascript;base64,'+Buffer.from(js).toString('base64'));
+const cases=[
+ ['Maya device info','LOCAL_DEVICE'],['মায়া ফোনের তথ্য','LOCAL_DEVICE'],
+ ['battery status','LOCAL_DEVICE'],['Maya wi-fi status','LOCAL_WIFI'],
+ ['ওয়াইফাই স্ট্যাটাস','LOCAL_WIFI'],['Maya volume status','LOCAL_VOLUME_GET'],
+ ['Maya set volume to 75 percent','LOCAL_VOLUME_SET'],['মায়া ভলিউম ৫০ করো','LOCAL_VOLUME_SET'],
+ ['torch on','FLASHLIGHT_ON'],['Maya torch off','FLASHLIGHT_OFF'],
+ ['Maya choose folder','FILES_PICK'],['ফাইলগুলো দেখাও','FILES_LIST'],
+ ['Maya read file report.txt','LOCAL_FILE_READ'],['Maya delete file report.txt','LOCAL_FILE_DELETE'],
+ ['Maya save file notes.txt with hello there','FILES_SAVE_TEXT'],['Maya check file delete status','LOCAL_DELETE_STATUS']
+];
+for(const [utterance,expected] of cases)assert.equal(m.parseLocalVoice(utterance)?.action,expected,utterance);
+assert.equal(m.parseLocalVoice('Maya set volume to 75 percent').percent,75);
+assert.equal(m.parseLocalVoice('Maya save file notes.txt with hello there').text,'hello there');
+for(const utterance of ['Maya set volume to 101','Maya delete all files','Maya unlock phone',
+ 'Maya read file ../../secret.txt','Maya save file .config.txt with data','Maya transfer money','hello how are you'])
+ assert.equal(m.parseLocalVoice(utterance),null,utterance);
+assert.match(m.describeLocal({action:'LOCAL_FILE_DELETE',name:'notes.txt'},{status:'requested'}),/Nothing has been deleted yet/);
+assert.match(m.describeLocal({action:'LOCAL_VOLUME_SET'},{status:'error',message:'Not permitted'}),/Not permitted/);
+assert.equal(js.includes('mayaLocalPanel'),false,'No new separate phone panel');
+assert.equal(js.includes('maya_life_voice_v25'),false,'Local voice must not need extra opt-in toggle');
 const native=readFileSync(new URL('../native-local/MayaLocalTools.java',import.meta.url),'utf8');
-for(const c of ['LOCAL_DEVICE','LOCAL_WIFI','LOCAL_VOLUME_GET','LOCAL_VOLUME_SET','LOCAL_FILE_READ','LOCAL_FILE_DELETE','LOCAL_DELETE_STATUS'])assert.ok(native.includes('"'+c+'"'));
 assert.ok(native.includes('new AlertDialog.Builder(act)'));
 assert.ok(native.includes('getPersistedUriPermissions'));
-assert.ok(!native.includes('MANAGE_EXTERNAL_STORAGE')&&!native.includes('deleteRecursively'));
-const patch=readFileSync(new URL('../scripts/install-local-tools.py',import.meta.url),'utf8');
-assert.ok(patch.includes('MayaLocalTools.run(ctx,act,action,input)'));
-assert.ok(readFileSync(new URL('../maya-features/advanced-loader.js',import.meta.url),'utf8').includes("import './local-tools.js'"));
-console.log('Maya PC-free module parsing, SAF and integration checks passed (Android hardware test still needed).');
+assert.ok(!native.includes('MANAGE_EXTERNAL_STORAGE'));
+assert.ok(native.includes('static boolean voice(Context ctx, String words)'));
+const installer=readFileSync(new URL('../scripts/install-local-tools.py',import.meta.url),'utf8');
+assert.ok(installer.includes('MayaLocalTools.voice(ctx,words)'));
+assert.ok(installer.includes('MayaLocalTools.run(ctx,act,action,input)'));
+const loader=readFileSync(new URL('../maya-features/advanced-loader.js',import.meta.url),'utf8');
+assert.ok(loader.includes("import './local-tools.js'"));
+assert.ok(loader.indexOf("import './local-tools.js'")>loader.indexOf("import './voice-media-bridge.js'"));
+console.log('Single Maya voice routes, no separate local panel, confirmed scoped Android actions: static tests passed.');
