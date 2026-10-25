@@ -48,7 +48,16 @@ function render(){
   row.append(label,remove);rules.append(row);
  });
  if(!(Array.isArray(data.rules)&&data.rules.length))rules.textContent='No approved contacts. Auto Reply is OFF by default.';
- const out=$('mayaAutoReplyLast');out.textContent='Last native result: '+(data.lastOutcome||'No automatic reply attempted.');
+ const out=$('mayaAutoReplyLast');
+ const when=data.lastOutcomeTime?new Date(data.lastOutcomeTime).toLocaleString():'not recorded';
+ out.textContent='Last decision ('+when+'): '+(data.lastOutcome||'No automatic reply attempted.');
+ const help=$('mayaAutoReplyHelp');
+ if(help){
+  help.textContent=!data.listenerConnected?'Maya Notification Listener is OFF. Go to Android Notification Access and enable Maya. WhatsApp/IMO must show notifications with a Reply button.'
+   :!data.rules?.length?'No approved contact rule. Add an exact sender and reply first.'
+   :!data.enabled?'Auto Reply is OFF. Enable it with the checkbox after saving a rule.'
+   :'Auto Reply is ON. Ask the specifically approved contact to send a NEW harmless message (not a group message), then tap Refresh to see the decision. Android Quick Reply delivery is not guaranteed.';
+ }
 }
 function mount(){
  const host=document.querySelector('#setSheet .body');
@@ -72,6 +81,7 @@ function mount(){
  '<button class="btn pri" id="mayaAutoReplySave">Save contact rule (does NOT enable sending)</button>',
  '<p class="note">Maya automatically adds “— Maya auto-reply”. Limit: one response per contact every 15 minutes, max 5 per contact per day and 15 overall. Group messages, security codes and unsupported Reply notifications are excluded. If two contacts share a displayed name, do not enable this rule.</p>',
  '<h4>Approved sender list</h4><div id="mayaAutoReplyRules"></div>',
+ '<p id="mayaAutoReplyHelp" class="note" role="status"></p>',
  '<p id="mayaAutoReplyLast" class="note"></p><p id="mayaAutoReplyFeedback" class="note" role="status"></p>'
  ].join('');
  host.append(pane);
