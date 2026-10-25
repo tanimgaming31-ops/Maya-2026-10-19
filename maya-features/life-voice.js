@@ -1,7 +1,7 @@
 /* Maya V25 unified Life Suite commands: opt-in, local and confirmation-first. */
 import {addRecord,loadData,searchNotes,weekly} from './life-suite.js';
 import {parseHubCommand,executeHubCommand} from './smart-hub.js';
-import {parseOpenAppCommand,openNamedApp} from './app-launcher.js';
+import {parseOpenAppCommand,openNamedApp,openPlayStoreForApp} from './app-launcher.js';
 export const VOICE_KEY='maya_life_voice_v25';
 const digitMap={'০':'0','১':'1','২':'2','৩':'3','৪':'4','৫':'5','৬':'6','৭':'7','৮':'8','৯':'9'};
 const clean=v=>String(v||'').normalize('NFKC').replace(/[০-৯]/gu,c=>digitMap[c]).replace(/^(?:you|আপনি)\s*:\s*/iu,'').replace(/^[“"‘]+|[”"’]+$/gu,'').replace(/[।!?]+$/gu,'').replace(/\s+/gu,' ').trim();
@@ -64,6 +64,7 @@ export async function runLifeVoice(command){
   let msg='';
   switch(command.kind){
    case 'appLaunch': msg=await openNamedApp(command.name);break;
+   case 'appInstall': msg=await openPlayStoreForApp(command.name);break;
    case 'agentOpen':{
     const btn=el('btnAgentSuite');if(!btn)return report('Agent Suite controls have not loaded.');
     btn.click();msg='Opened Maya Agent Suite in Settings.';break;
