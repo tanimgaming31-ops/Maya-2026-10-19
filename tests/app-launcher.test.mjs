@@ -192,7 +192,7 @@ assert.deepEqual(storeCalls.at(-1),{
 });
 assert.ok((await lifeApi.runLifeVoice(lifeApi.parseLifeVoice('Maya install Super New App'))).includes('search requested'));
 assert.deepEqual(storeCalls.at(-1),{
- action:'OPEN_URL',args:{url:'https://play.google.com/store/search?q=Super%20New%20App&c=apps',pkg:'com.android.vending'}
+ action:'OPEN_URL',args:{url:'https://play.google.com/store/search?q=Super%20New&c=apps',pkg:'com.android.vending'}
 });
 assert.equal(launchCalls.length,5,'Store lookup must never auto-launch an installed app');
 /* ---- Native background-launch outcomes: a posted notification is pending user action, not failure. ---- */
