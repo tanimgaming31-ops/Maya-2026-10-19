@@ -17,6 +17,18 @@ const parseCases=[
  ['গুগল ম্যাপস খুলে দাও','গুগল ম্যাপস'],
 ];
 for(const [phrase,name] of parseCases)assert.equal(m.parseOpenAppCommand(phrase)?.name,name,phrase);
+for(const [voice,name] of [
+ ['install WhatsApp','WhatsApp'],['download Instagram app','Instagram'],
+ ['WhatsApp ইনস্টল করো','WhatsApp'],['ইমো ইনস্টল করে দাও','ইমো'],
+ ['গুগল ম্যাপস ডাউনলোড করো','গুগল ম্যাপস']
+])assert.deepEqual(m.parseOpenAppCommand(voice),{kind:'appInstall',name},voice);
+for(const unsafe of ['install','install    ','install https://bad.example','install x','install '+('x'.repeat(101))])
+ assert.equal(m.parseOpenAppCommand(unsafe),null,unsafe);
+assert.equal(m.playStoreUrlForApp('WhatsApp'),'https://play.google.com/store/apps/details?id=com.whatsapp');
+assert.equal(m.playStoreUrlForApp('হোয়াটসঅ্যাপ বিজনেস'),'https://play.google.com/store/apps/details?id=com.whatsapp.w4b');
+assert.equal(m.playStoreUrlForApp('ইমো'),'https://play.google.com/store/apps/details?id=com.imo.android.imoim');
+assert.equal(m.playStoreUrlForApp('Unlisted app name'),'https://play.google.com/store/search?q=Unlisted%20app%20name&c=apps');
+assert.equal(m.playStoreUrlForApp('https://wrong.example'),null);
 for(const phrase of ['','whatsapp','tell me about whatsapp','send WhatsApp message','open','open   ','open life','Maya my birthday','হোয়াটসঅ্যাপ মেসেজ পাঠাও','call 999','read notifications']) {
  if(phrase==='open life')continue; // valid ambiguous app phrase, native must decide
  assert.equal(m.parseOpenAppCommand(phrase),null,phrase);
@@ -47,6 +59,8 @@ const bridge=readFileSync(new URL('../maya-features/life-voice.js',import.meta.u
 const loader=readFileSync(new URL('../maya-features/advanced-loader.js',import.meta.url),'utf8');
 assert.ok(bridge.includes('parseOpenAppCommand(t)'),'voice command app parser missing');
 assert.ok(bridge.includes("case 'appLaunch'"),'app launcher case missing');
+assert.ok(bridge.includes("case 'appInstall'"),'Play Store voice case missing');
+assert.ok(bridge.includes('openPlayStoreForApp(command.name)'),'Install voice must use store lookup');
 assert.ok(loader.includes("import './app-launcher.js'"),'launcher module missing from original Maya');
 console.log('Maya App Launcher: parser, exact-label, alias, ambiguity, security and voice bridge checks passed. Requires Android device tests.');
 
@@ -74,7 +88,7 @@ assert.ok(agentSuiteSrc.includes("case 'phone'"),'agent phone dispatch missing')
 assert.ok(agentSuiteSrc.includes('openNamedApp(name)'),'agent phone route must call openNamedApp');
 
 /* ---- Behavioral harness: fake native bridge + minimal DOM (chooser, settings host). ---- */
-const launchCalls=[];const madeButtons=[];const registry=Object.create(null);let launchStatus={status:'launched'};let notifyPermissionStatus={status:'requested'};
+const storeCalls=[];const launchCalls=[];const madeButtons=[];const registry=Object.create(null);let launchStatus={status:'launched'};let notifyPermissionStatus={status:'requested'};
 function newFakeEl(){
  const el={hidden:true,style:{},onclick:null,value:'',textContent:'',className:'',placeholder:'',maxLength:0,checked:false,disabled:false,open:false,children:[],_html:'',_id:''};
  el.append=(...cs)=>{el.children.push(...cs);};
@@ -90,7 +104,11 @@ let lifeEnabled=true;
 globalThis.window={MayaBridge:{
  listLaunchableApps:()=>JSON.stringify({status:'ok',apps}),
  launchListedApp:(pkg,act)=>{launchCalls.push([pkg,act]);return JSON.stringify({...launchStatus});},
- requestLaunchNotifications:()=>JSON.stringify({...notifyPermissionStatus})
+ requestLaunchNotifications:()=>JSON.stringify({...notifyPermissionStatus}),
+ control:(action,args)=>{
+  storeCalls.push({action,args:JSON.parse(args)});
+  return JSON.stringify({status:'opened',message:'Opened.'});
+ }
 },dispatchEvent(){}};
 globalThis.Event=class Event{constructor(t){this.type=t;}};
 globalThis.localStorage={getItem:k=>k==='maya_life_voice_v25'?(lifeEnabled?'true':null):null,setItem(){},removeItem(){}};
@@ -165,6 +183,18 @@ tapSuggestion('Messenger');
 assert.equal(await agentRun,'Android launch requested: Messenger.');
 assert.deepEqual(launchCalls[4],['com.facebook.orca','com.facebook.orca.Main']);
 assert.equal(launchCalls.length,5);
+// "Install" opens only the Store listing/search. It must not silently install an app.
+assert.deepEqual(lifeApi.parseLifeVoice('Maya install WhatsApp'),{kind:'appInstall',name:'WhatsApp'});
+assert.deepEqual(lifeApi.parseLifeVoice('মায়া ইমো ইনস্টল করো'),{kind:'appInstall',name:'ইমো'});
+assert.ok((await lifeApi.runLifeVoice(lifeApi.parseLifeVoice('Maya install WhatsApp'))).includes('tap Install yourself'));
+assert.deepEqual(storeCalls.at(-1),{
+ action:'OPEN_URL',args:{url:'https://play.google.com/store/apps/details?id=com.whatsapp',pkg:'com.android.vending'}
+});
+assert.ok((await lifeApi.runLifeVoice(lifeApi.parseLifeVoice('Maya install Super New App'))).includes('search requested'));
+assert.deepEqual(storeCalls.at(-1),{
+ action:'OPEN_URL',args:{url:'https://play.google.com/store/search?q=Super%20New%20App&c=apps',pkg:'com.android.vending'}
+});
+assert.equal(launchCalls.length,5,'Store lookup must never auto-launch an installed app');
 /* ---- Native background-launch outcomes: a posted notification is pending user action, not failure. ---- */
 const beforeBg=launchCalls.length;
 launchStatus={status:'background'};
