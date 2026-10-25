@@ -67,6 +67,7 @@ public final class MayaLocalTools {
     static boolean voice(Context ctx, String words) {
         if(words==null)return false;
         String s=words.trim().toLowerCase(java.util.Locale.ROOT).replaceAll("[।!?.,]+$","").trim();
+        for(int i=0;i<10;i++)s=s.replace((char)('০'+i),(char)('0'+i));
         String action=null;JSONObject input=new JSONObject();
         if(s.matches("^(?:device info|phone info|ফোনের তথ্য|ফোনের ইনফো)$"))action="LOCAL_DEVICE";
         else if(s.matches("^(?:wi-?fi status|check wi-?fi|ওয়াইফাই স্ট্যাটাস|ওয়াইফাই স্ট্যাটাস)$"))action="LOCAL_WIFI";
