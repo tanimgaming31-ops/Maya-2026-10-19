@@ -2,7 +2,7 @@
    Keep existing screenshot, media, app-launch and memory routes untouched.
    No separate interface, no new toggle, no remote gateway. */
 export function parseLocalVoice(raw) {
- const text=String(raw||'').normalize('NFKC').replace(/^(?:you|আপনি)\s*:\s*/iu,'')
+ const text=String(raw||'').normalize('NFKC').replace(/[০-৯]/gu,c=>String('০১২৩৪৫৬৭৮৯'.indexOf(c))).replace(/^(?:you|আপনি)\s*:\s*/iu,'')
    .replace(/[।!?]+$/gu,'').replace(/\s+/gu,' ').trim();
  if(text.length>700)return null;
  const body=text.replace(/^(?:(?:hey\s+)?maya|মায়া|মায়া|মাইয়া|মাইয়া)\s*[,،:]?\s+/iu,'').trim();
