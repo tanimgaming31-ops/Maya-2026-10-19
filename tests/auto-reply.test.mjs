@@ -29,12 +29,21 @@ for(const literal of [
  'MAX_PER_RULE_DAY = 5', 'MAX_PER_DAY = 15',
  'COOLDOWN_MS = 15L*60_000L', 'isGroup(n,m.sender)',
  'forbiddenIncoming(m.text)', 'normalize(m.sender)',
- 'if(Math.abs(now-sbn.getPostTime())>120000L)return;',
+ 'if(Math.abs(now-sbn.getPostTime())>120000L)',
  'replyAction(n)', 'RemoteInput.addResultsToIntent',
  'action.actionIntent.send(c,0,intent);',
  'delivery unverified', 'new JSONArray',
- 'if(count>=MAX_PER_DAY)return;'
+ 'if(count>=MAX_PER_DAY)'
 ])assert.ok(java.includes(literal),literal);
+assert.ok(java.includes('private static void note(SharedPreferences p,String code)'));
+assert.ok(java.includes('NO_RULE_MATCH'));
+assert.ok(java.includes('NO_QUICK_REPLY'));
+assert.ok(java.includes('needs_access'));
+assert.ok(java.includes('EXTRA_CONVERSATION_TITLE'));
+assert.ok(java.includes('!normalize(conversation.toString()).equals(normalize(title))'));
+assert.ok(js.includes('Last decision ('));
+assert.ok(js.includes('Notification Listener is OFF'));
+assert.ok(!java.includes('getString("last",m.text'));
 assert.ok(!java.includes('QUERY_ALL_PACKAGES'));
 assert.ok(!java.includes('apiKey'));
 const py=src('scripts/install-auto-reply.py');
