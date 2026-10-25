@@ -56,6 +56,26 @@ if line not in s:
     if s.count(anchor)!=1:raise SystemExit("Native voiceCommand anchor changed")
     s=s.replace(anchor,line,1)
 voice.write_text(s,encoding="utf-8")
+# SpeechRecognizer supplies up to three hypotheses. Check only explicit
+# screenshot phrases first; otherwise preserve the original Maya command route.
+voice_service=src/"MayaV4VoiceService.java"
+v=voice_service.read_text(encoding="utf-8")
+old='''        if (heard != null && !heard.isEmpty()) MayaV4Controls.voiceCommand(this, heard.get(0));'''
+new='''        if (heard != null && !heard.isEmpty()) {
+            boolean used=false;
+            for (int i=0; i<heard.size() && i<3; i++) {
+                String candidate=heard.get(i);
+                if (MayaVoiceMedia.isExplicitScreenshotUtterance(candidate)) {
+                    MayaVoiceMedia.handleSpoken(this,candidate);
+                    used=true;
+                    break;
+                }
+            }
+            if(!used)MayaV4Controls.voiceCommand(this,heard.get(0));
+        }'''
+if new not in v:
+    if v.count(old)!=1:raise SystemExit("Android voice recognition onResults hook changed")
+    voice_service.write_text(v.replace(old,new,1),encoding="utf-8")
 if "MayaVoiceMedia.handleSpoken(ctx, words)" not in s:raise SystemExit("Native voice command routing missing")
 if 'android:canTakeScreenshot="true"' not in service.read_text(encoding='utf-8'):raise SystemExit("Accessibility screenshot not enabled")
 print("Maya voice media: Accessibility screen capture to Gallery; YouTube matching-video auto-tap and native voice commands installed.")
