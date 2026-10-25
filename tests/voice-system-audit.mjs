@@ -22,7 +22,7 @@ const launcherUrl='data:text/javascript;base64,'+Buffer.from(raw+'\n// audit ins
 const lifeSource=readFileSync(new URL('../maya-features/life-voice.js',import.meta.url),'utf8')
  .replace(/^import \{addRecord,loadData,searchNotes,weekly\} from '\.\/life-suite\.js';/m,"const addRecord=()=>{},loadData=()=>({diary:[]}),searchNotes=()=>[],weekly=()=>({diary:0,flashcards:0,focusMinutes:0,spent:{}});")
  .replace(/^import \{parseHubCommand,executeHubCommand\} from '\.\/smart-hub\.js';/m,"const parseHubCommand=()=>null;const executeHubCommand=async()=>'';")
- .replace(/^import \{parseOpenAppCommand,openNamedApp\} from '\.\/app-launcher\.js';/m,"import {parseOpenAppCommand,openNamedApp} from '"+launcherUrl+"';");
+ .replace(/^import \{parseOpenAppCommand,openNamedApp,openPlayStoreForApp\} from '\.\/app-launcher\.js';/m,"import {parseOpenAppCommand,openNamedApp,openPlayStoreForApp} from '"+launcherUrl+"';");
 const life=await import('data:text/javascript;base64,'+Buffer.from(lifeSource).toString('base64'));
 const agent=await import(new URL('../maya-features/agent-voice.js',import.meta.url));
 
