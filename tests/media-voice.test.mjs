@@ -26,6 +26,8 @@ assert.ok(parser.includes("native('SCREEN_CAPTURE')"));
 assert.ok(parser.includes("native('SCREEN_DIAG')"));
 assert.ok(parser.includes("native('SCREEN_ENABLE',{enabled:true})"));
 assert.ok(parser.includes('Diagnose Android Screenshot Permissions'));
+assert.ok(parser.includes('Background microphone service: '));
+assert.ok(parser.includes('Last native screenshot voice recognized: '));
 assert.ok(parser.includes('Fallback: Android screen-sharing permission prompt'));
 assert.ok(parser.includes('requestScreenshot()'));
 assert.ok(parser.includes("screenshotPlugin.status()"));
@@ -36,9 +38,11 @@ for(const q of ['takeScreenshot(Display.DEFAULT_DISPLAY','MayaV4AccessService.ac
  'MediaStore.Images.Media.IS_PENDING','android.graphics.Bitmap', 'videoStatus="pending"',
  'AccessibilityNodeInfo.ACTION_CLICK','"com.google.android.youtube"','CAPTURING.compareAndSet(false,true)',
  'getSharedPreferences(PREF,0).getBoolean(OPT_IN,false)',
- 'SCREEN_DIAG','CAPABILITY_CAN_TAKE_SCREENSHOT','ERROR_TAKE_SCREENSHOT_NO_ACCESSIBILITY_ACCESS']) assert.ok(screen.includes(q),q);
+ 'SCREEN_DIAG','CAPABILITY_CAN_TAKE_SCREENSHOT','ERROR_TAKE_SCREENSHOT_NO_ACCESSIBILITY_ACCESS', 'isExplicitScreenshotUtterance(String phrase)',
+ 'lastRecognizedScreenshot','backgroundVoiceRunning','lastVoiceActionResult']) assert.ok(screen.includes(q),q);
 const install=read('scripts/install-voice-media.py');
-for(const q of ['MayaV4Controls.java','MayaVoiceMedia.handleSpoken','android:canTakeScreenshot="true"',
+for(const q of ['MayaV4Controls.java','MayaV4VoiceService.java','MayaVoiceMedia.isExplicitScreenshotUtterance(candidate)',
+ 'MayaV4Controls.voiceCommand(this,heard.get(0))','MayaVoiceMedia.handleSpoken','android:canTakeScreenshot="true"',
  'MayaVoiceMedia.handleSpoken(ctx, words)','public String mediaVoice(String action, String json)'])
  assert.ok(install.includes(q),q);
 const loader=read('maya-features/advanced-loader.js');
