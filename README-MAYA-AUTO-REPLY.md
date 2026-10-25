@@ -27,3 +27,9 @@ Maya can automatically **submit an Android notification Quick Reply** on the use
 `node tests/auto-reply.test.mjs` covers UI input validation and static Java safety checks. GitHub Actions installs generated Android code using `python3 scripts/install-auto-reply.py` and compiles the APK. Device-testing the actual notification/action/delivery remains necessary before enabling replies to anyone you do not expect.
 
 No new paid services or blanket Android permissions are added.
+
+## Troubleshooting in the next APK
+
+Open **Settings → Maya WhatsApp & IMO → Refresh status** after a trusted contact sends a *new harmless* WhatsApp/IMO notification. **Last decision** shows why a reply was skipped without storing the message text. `NO_RULE_MATCH`: the selected app or sender notification name differs from the exact saved rule; `NO_QUICK_REPLY`: the installed messaging app supplied no supported Android RemoteInput action; `GROUP_OR_AMBIGUOUS_SENDER`: the title resembles a group or has ambiguous sender information; `COOLDOWN`: an approved contact was already replied to within 15 minutes; `SUBMITTED`: Android accepted the Quick Reply intent but delivery was not verified. If Listener is OFF, manually re-enable Maya Notification Access in Android Settings. No rules or Auto Reply OFF means nothing is sent.
+
+Some versions of Android set `EXTRA_CONVERSATION_TITLE` for one-to-one conversations. The implementation now treats a conversation title equal to the notification title as potentially a direct message, but continues to block explicit group flags and ambiguous sender names. This is still only a *user-written template* auto-reply, not Gemini-generated smart replies. Validate using a trusted test sender before use.
