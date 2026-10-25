@@ -89,6 +89,9 @@ public final class MayaVoiceMedia {
             out.put("voiceScreenshotOptIn",opted(c));
             out.put("accessibilityConnected",connected);
             out.put("screenshotCapability",capability);
+            out.put("backgroundVoiceRunning",MayaV4VoiceService.running);
+            out.put("lastRecognizedScreenshot",c.getSharedPreferences(PREF,0).getLong("lastRecognizedScreenshot",0L));
+            out.put("lastVoiceActionResult",c.getSharedPreferences(PREF,0).getString("lastVoiceActionResult","No native screenshot voice command recognized yet."));
             out.put("latestCapture",screenshotStatus(c));
             out.put("message",Build.VERSION.SDK_INT<30?"Use the Android screen-capture permission button: direct Accessibility screenshot requires Android 11+."
                 :!connected?"Enable Maya Screen Controls in Android Accessibility settings; after an APK upgrade turn the service OFF and back ON."
@@ -124,15 +127,18 @@ public final class MayaVoiceMedia {
             .putString("captureStatus",status).putString("captureMessage",message)
             .putString("captureUri",uri).apply();
     }
+    private static String refuseScreenshot(Context c,String status,String detail){
+        writeStatus(c,status,detail,"");return json(status,detail);
+    }
     public static String screenshot(Context c){
-        if(!opted(c))return json("needs_opt_in","Enable Voice Screenshot in Maya Settings first.");
-        if(Build.VERSION.SDK_INT<30)return json("unsupported","One-command Accessibility screenshot needs Android 11+. Use the existing Android capture consent button on Android 10.");
+        if(!opted(c))return refuseScreenshot(c,"needs_opt_in","Enable Voice Screenshot in Maya Settings first.");
+        if(Build.VERSION.SDK_INT<30)return refuseScreenshot(c,"unsupported","Direct Accessibility screenshot requires Android 11+. Use the original Android screen-sharing capture prompt.");
         MayaV4AccessService access=MayaV4AccessService.active;
-        if(access==null)return json("needs_accessibility","Enable Maya Screen Controls under Android Accessibility settings.");
+        if(access==null)return refuseScreenshot(c,"needs_accessibility","Enable Maya Screen Controls under Android Accessibility settings.");
         AccessibilityServiceInfo activeInfo=access.getServiceInfo();
         if(activeInfo==null||(activeInfo.getCapabilities() &
             AccessibilityServiceInfo.CAPABILITY_CAN_TAKE_SCREENSHOT)==0)
-            return json("needs_accessibility","Maya Screen Controls is enabled but Android has not granted screenshot capability. Turn the service OFF and ON in Android Accessibility settings.");
+            return refuseScreenshot(c,"needs_accessibility","Maya Screen Controls is enabled but Android has not granted screenshot capability. Turn the service OFF and ON in Android Accessibility settings.");
         if(!CAPTURING.compareAndSet(false,true))return json("busy","A screenshot is already processing.");
         writeStatus(c,"capturing","Android screenshot requested; not saved yet.","");
         final long started=SystemClock.elapsedRealtime();
@@ -210,12 +216,32 @@ public final class MayaVoiceMedia {
             if(buffer!=null)buffer.close();
         }
     }
-    /** Execute only an explicitly spoken request with Maya prefix handled by caller. */
-    public static boolean handleSpoken(Context context,String words){
+    // Spoken phrase matching is deliberately narrow: a standalone explicit
+    // screenshot command is allowed only while the user-started microphone
+    // service is already active. This is NOT an always-on wake-word listener.
+    private static String commandText(String words){
         String s=words==null?"":words.trim().toLowerCase(Locale.ROOT)
-            .replaceAll("[।!?]+$","").trim();
-        if(s.matches("^(?:(?:take|capture|save)(?: a| the| my)? screenshot|screenshot|স্ক্রিনশট(?: নাও| নিন| নেও| তোলো| তুলে দাও| নিয়ে দাও| নিয়ে দাও| সেভ করো| করো| করে দাও| দাও| তুলো| নিয়ে নাও| নিয়ে নাও)?|স্ক্রিনশট (?:নাও|তুলো|সেভ করো)|স্ক্রিনশট নিয়ে গ্যালারিতে সেভ করো|স্ক্রিনের ছবি (?:নাও|তোলো|তুলো|নিয়ে দাও|নিয়ে দাও))$")){
-            screenshot(context);return true;
+            .replaceAll("[।!?,]+$","").trim();
+        return s.replaceFirst("^(?:(?:hey )?maya|মায়া|মায়া|মাইয়া|মাইয়া)[,،:]?\\s+","");
+    }
+    public static boolean isExplicitScreenshotUtterance(String phrase){
+        String s=commandText(phrase);
+        return s.matches("^(?:(?:take|capture|save)(?: a| the| my)? screenshot|screenshot(?: now)?|স্ক্রিনশট(?: নাও| নিন| নেও| তোলো| তুলে দাও| নিয়ে দাও| নিয়ে দাও| সেভ করো| করো| করে দাও| দাও| তুলো| নিয়ে নাও| নিয়ে নাও)?|স্ক্রিনশট নিয়ে গ্যালারিতে সেভ করো|স্ক্রিনের ছবি (?:নাও|তোলো|তুলো|নিয়ে দাও|নিয়ে দাও))$");
+    }
+    public static boolean handleSpoken(Context context,String words){
+        String s=commandText(words);
+        if(isExplicitScreenshotUtterance(words)){
+            String result=screenshot(context);
+            String outcome="Screenshot voice recognized; Android reported no completion.";
+            try{
+                JSONObject status=new JSONObject(result);
+                outcome="Voice recognized → "+status.optString("status","unknown")+
+                    ": "+status.optString("message","Check Gallery result.");
+            }catch(Exception ignored){}
+            context.getSharedPreferences(PREF,0).edit()
+                .putLong("lastRecognizedScreenshot",System.currentTimeMillis())
+                .putString("lastVoiceActionResult",outcome).apply();
+            return true;
         }
         String title=null;
         java.util.regex.Matcher en=java.util.regex.Pattern.compile("^(?:play youtube|youtube play|youtube search and play|play on youtube) (.{2,150})$").matcher(s);
