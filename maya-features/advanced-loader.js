@@ -27,6 +27,8 @@ import './intelligence-v160.js';
 import './android-controls-v167.js';
 // Maya Camera & Smart Vision V169: all 6 tools enter the existing voice router.
 import './smart-vision-v169.js';
+// V172 adds real Voice dispatch for captions, local home, router guides, original 2D avatar and study quiz.
+import './voice-first-v172.js';
 function init(){
   const host=document.querySelector('#setSheet .body');
   if(!host||document.getElementById('mayaAdvancedLink'))return;
