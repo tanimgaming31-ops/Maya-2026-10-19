@@ -5,6 +5,9 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.pm.ActivityInfo;
 import android.content.pm.PackageManager;
+import android.content.pm.LauncherApps;
+import android.content.pm.LauncherActivityInfo;
+import android.os.Process;
 import android.content.pm.ResolveInfo;
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -51,6 +54,32 @@ public final class MayaAppCatalog {
             entry.put("packageName", ai.packageName);
             entry.put("activityName", ai.name);
             entries.add(entry);
+        }
+        // On Android 11+, PackageManager discovery can be limited by app
+        // visibility. LauncherApps provides a second system-sanctioned view of
+        // MAIN/LAUNCHER activities in the current user profile; no permission
+        // to inventory arbitrary (non-launchable) packages is requested.
+        try {
+            LauncherApps launcher = (LauncherApps) context.getSystemService(Context.LAUNCHER_APPS_SERVICE);
+            if (launcher != null) {
+                List<LauncherActivityInfo> current = launcher.getActivityList(null, Process.myUserHandle());
+                for (LauncherActivityInfo candidate : current) {
+                    if (candidate == null || candidate.getComponentName() == null) continue;
+                    ComponentName component = candidate.getComponentName();
+                    String unique = component.getPackageName() + "/" + component.getClassName();
+                    if (!seen.add(unique)) continue;
+                    CharSequence label = candidate.getLabel();
+                    String title = label == null ? component.getPackageName() : label.toString().trim();
+                    JSONObject entry = new JSONObject();
+                    entry.put("label", title.length() > 160 ? title.substring(0,160) : title);
+                    entry.put("packageName", component.getPackageName());
+                    entry.put("activityName", component.getClassName());
+                    entries.add(entry);
+                }
+            }
+        } catch (Exception ignored) {
+            // Continue with the ordinary MAIN/LAUNCHER list if LauncherApps
+            // access is unavailable on this Android manufacturer build.
         }
         entries.sort((a, b) -> {
             int order = a.optString("label").toLowerCase(Locale.ROOT)
