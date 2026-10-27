@@ -812,6 +812,9 @@ const stamp = d => d.getFullYear() + pad(d.getMonth() + 1) + pad(d.getDate()) + 
 function planAction(action, p, now) {
   switch (action) {
     case 'OPEN_APP': {
+      // A request for Maya's own camera should not start the external camera app.
+      if (['camera','maya camera','your camera','ক্যামেরা','তোমার ক্যামেরা'].includes(String(p.app||'').trim().toLowerCase()))
+        return {kind:'maya-camera',label:'Maya camera'};
       const a = appLink(p.app);
       if (!a) return { kind:'installed-app', name:p.app };
       return { kind:'link', href:a.href, label:'Open ' + a.label,
