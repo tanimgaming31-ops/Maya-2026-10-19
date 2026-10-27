@@ -1,0 +1,18 @@
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+const js=readFileSync(new URL('../maya-features/visual-life-tools.js',import.meta.url),'utf8');
+const java=readFileSync(new URL('../native-visual/MayaVisualScan.java',import.meta.url),'utf8');
+const install=readFileSync(new URL('../scripts/install-visual-tools.py',import.meta.url),'utf8');
+const loader=readFileSync(new URL('../maya-features/advanced-loader.js',import.meta.url),'utf8');
+assert.ok(js.includes('export function extractReceipt'));
+assert.ok(js.includes("addRecord('expense',p)"));
+assert.ok(js.includes("'SCAN_BARCODE'")&&js.includes("'SCAN_RECEIPT'"));
+assert.ok(js.includes('navigator.clipboard.readText()'));
+assert.ok(js.includes('window.MayaBridge.openKeyboardSettings()'));
+assert.ok(java.includes('BarcodeScanning.getClient()'));
+assert.ok(java.includes('TextRecognition.getClient('));
+assert.ok(java.includes('SCAN_CANCEL')&&java.includes('SCAN_RESULT'));
+assert.ok(install.includes('com.google.mlkit:barcode-scanning:17.3.0'));
+assert.ok(install.includes('com.google.mlkit:text-recognition:16.0.1'));
+assert.ok(loader.includes("import './visual-life-tools.js'"));
+console.log('Maya visual QR/receipt, expense, clipboard and keyboard wiring: passed.');
