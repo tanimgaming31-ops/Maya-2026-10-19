@@ -1,0 +1,56 @@
+/* WhatsApp voice conversation — tests never send real messages. */
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+const source=readFileSync(new URL('../maya-features/whatsapp-voice-flow.js',import.meta.url),'utf8');
+const flow=await import('data:text/javascript;base64,'+Buffer.from(source).toString('base64'));
+for(const input of ['মায়া আমার WhatsApp খোলো','মায়া তুমি আমার WhatsApp খুলো','মায়া WhatsApp ওপেন করো','Maya, open my whatsapp','Maya whatsapp মেসেজ পাঠাও'])
+ assert.equal(flow.isStart(input),true,input);
+for(const t of ['what is WhatsApp','WhatsApp','Maya, read WhatsApp messages','মায়া Instagram খোলো'])
+ assert.equal(flow.isStart(t),false,t);
+assert.equal(flow.parseLanguage('English'),'English');
+assert.equal(flow.parseLanguage('বাংলা'),'বাংলা');
+assert.equal(flow.parseLanguage('Indonesian'),'Indonesian');
+assert.equal(flow.parseLanguage('Tagalog'),'Tagalog');
+assert.equal(flow.parseLanguage('Spanish'),'disabled');
+assert.equal(flow.parseLanguage('español'),'disabled');
+assert.equal(flow.parseLanguage('nonsense'),null);
+assert.equal(flow.validRecipient('রহিম'),true);
+assert.equal(flow.validRecipient('Rubi'),true);
+assert.equal(flow.validRecipient('a'),false);
+assert.equal(flow.validRecipient('https://host.invalid'),false);
+let delivered=0, translated=0,data=null;
+assert.equal(flow.stage(),'idle');
+assert.ok((await flow.process('Maya open my WhatsApp')).includes('কাকে'));
+assert.equal(flow.stage(),'recipient');
+assert.ok((await flow.process('রহিম')).includes('কী লিখব'));
+assert.equal(flow.stage(),'dictate');
+assert.ok((await flow.process('আজ বিকেলে দেখা হবে')).includes('কোন ভাষায়'));
+assert.equal(flow.stage(),'language');
+assert.ok((await flow.process('Spanish')).includes('Spanish'));
+assert.equal(flow.stage(),'language');
+const review=await flow.process('English',{translate:async(t,lang)=>{
+ translated++;assert.equal(t,'আজ বিকেলে দেখা হবে');assert.equal(lang,'English');return 'See you this afternoon.';
+}});
+assert.equal(translated,1);
+assert.ok(review.includes('রহিম')&&review.includes('See you this afternoon.')&&review.includes('হ্যাঁ পাঠাও'));
+assert.equal(flow.stage(),'confirm');
+const no=await flow.process('yes',{send:()=>{delivered++;return {status:'pending'};}});
+assert.ok(no.includes('অনুমতি'));
+assert.equal(delivered,0);
+assert.equal(flow.stage(),'confirm');
+const done=await flow.process('হ্যাঁ পাঠাও',{send:async d=>{data=d;delivered++;return {status:'pending'};}});
+assert.equal(delivered,1);
+assert.deepEqual({recipient:data.recipient,language:data.language,text:data.text},{recipient:'রহিম',language:'English',text:'See you this afternoon.'});
+assert.equal(flow.stage(),'idle');
+assert.ok(done.includes('নিশ্চিত নয়'));
+assert.ok((await flow.process('মায়া আমার WhatsApp খোলো')).includes('কাকে'));
+assert.ok((await flow.process('cancel')).includes('বাতিল'));
+assert.equal(flow.stage(),'idle');
+assert.equal(delivered,1);
+assert.ok((await flow.process('মায়া WhatsApp মেসেজ স্ট্যাটাস',{status:async()=>({status:'sent_unverified',message:'Send button clicked. Delivery not verified.'})})).includes('Delivery not verified.'));
+const html=readFileSync(new URL('../index.html',import.meta.url),'utf8');
+const loader=readFileSync(new URL('../maya-features/advanced-loader.js',import.meta.url),'utf8');
+assert.ok(loader.includes("import './whatsapp-voice-flow.js'"),'voice module not loaded');
+assert.ok(html.includes('window.MayaWhatsAppTranslator=Object.freeze({translate:translateMayaWhatsApp})'),'existing Gemini translation not exposed');
+assert.ok(html.includes('V66_START'),'existing native guarded send route missing');
+console.log('Maya WhatsApp voice flow: start, exact recipient, dictation, target language, no-Spanish rule, explicit send permission, V66 wiring and status tests passed.');
