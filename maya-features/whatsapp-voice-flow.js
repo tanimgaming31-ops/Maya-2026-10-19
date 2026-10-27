@@ -9,7 +9,7 @@ export const isStart=v=>{
 };
 const stop=v=>/^(?:cancel|stop|বাতিল|থামো|মেসেজ বাতিল করো|মেসেজ বন্ধ করো)$/iu.test(unwake(v));
 const confirm=v=>/^(?:yes send|yes send it|send it|confirm send|হ্যাঁ পাঠাও|হ্যা পাঠাও|হ্যাঁ মেসেজ পাঠাও|পাঠিয়ে দাও|পাঠিয়ে দাও|সেন্ড করো|হ্যাঁ সেন্ড করো)$/iu.test(unwake(v));
-export const isStatus=v=>/^(?:whatsapp message status|check whatsapp status|হোয়াটসঅ্যাপ মেসেজ স্ট্যাটাস|হোয়াটসঅ্যাপ মেসেজ স্ট্যাটাস)$/iu.test(unwake(v));
+export const isStatus=v=>/^(?:whatsapp message status|check whatsapp status|whatsapp মেসেজ স্ট্যাটাস|হোয়াটসঅ্যাপ মেসেজ স্ট্যাটাস|হোয়াটসঅ্যাপ মেসেজ স্ট্যাটাস|মেসেজ স্ট্যাটাস)$/iu.test(unwake(v));
 export const parseLanguage=v=>{
  const t=unwake(v).toLowerCase();
  if(/^(?:spanish|español|espanol|স্প্যানিশ)$/iu.test(t))return 'disabled';
