@@ -12,6 +12,20 @@ let pass = 0, fail = 0;
 const t = (name, cond) => { if (cond) { pass++; } else { fail++; console.error('FAIL:', name); } };
 const eq = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 
+/* Explicit user choice: Maya must not speak Spanish, including translator/practice
+ * requests. Live model audio is prompt-directed; fallback TTS additionally guarded. */
+const languageApi = new Function(logic + '\nreturn {buildSystemPrompt,isSpanishSpeech,avoidSpanishSpeech};')();
+const languageRules = languageApi.buildSystemPrompt({lang:'bn',memories:[],packs:[]});
+t('Maya Live system prompt forbids Spanish speech',languageRules.includes('NEVER speak, generate, or read out Spanish'));
+t('Maya translator mode excludes Spanish output',languageRules.includes('Spanish voice is disabled'));
+t('Maya preferred-language rule cannot override Spanish restriction',languageRules.includes('Spanish is never permitted'));
+t('Fallback detects Spanish greetings',languageApi.isSpanishSpeech('Hola, ¿cómo estás?'));
+t('Fallback blocks spoken Spanish',languageApi.avoidSpanishSpeech('Hola, ¿cómo estás?')==='আমি বাংলায় কথা বলছি। তোমার কথাটা আরেকবার বলবে?');
+t('Fallback keeps Bangla',languageApi.avoidSpanishSpeech('তুমি কেমন আছো?')==='তুমি কেমন আছো?');
+t('Fallback keeps Tagalog',languageApi.avoidSpanishSpeech('Salamat po, kumusta ka?')==='Salamat po, kumusta ka?');
+t('Fallback keeps English',languageApi.avoidSpanishSpeech('Hello, what is your name?')==='Hello, what is your name?');
+
+
 /* 1. model list: the two Live models retiring 2026-11-17 must be gone */
 t('DEFAULT_LIVE has no retiring models', !api.DEFAULT_LIVE.includes('gemini-3.1-flash-live-preview') && !api.DEFAULT_LIVE.includes('gemini-2.5-flash-native-audio-preview-12-2025'));
 t('DEFAULT_LIVE keeps gemini-3.8-live first', api.DEFAULT_LIVE[0] === 'gemini-3.8-live');
