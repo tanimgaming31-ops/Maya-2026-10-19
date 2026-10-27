@@ -77,7 +77,10 @@ function avatar(){
  const svg=$('maya');if(!svg)return false;
  const hair=ALLOWED_COLORS[cfg.hair]||ALLOWED_COLORS.violet,outfit=OUTFITS[cfg.outfit]||OUTFITS.midnight;
  const stops=[...svg.querySelectorAll('#hairG stop, #hairF stop')];
- if(stops.length>=4)for(const [i,node] of stops.entries())node.setAttribute('stop-color',i%2===0?hair:(cfg.hair==='black'?'#595467':'#f4a9d5'));
+ if(stops.length>=4){
+  const original=['#6f5cff','#ff7fcf','#9a8bff','#ffa6dc'];
+  for(const [i,node] of stops.entries())node.setAttribute('stop-color',cfg.hair==='violet'?original[i%4]:(i%2===0?hair:(cfg.hair==='black'?'#595467':'#f4a9d5')));
+ }
  const body=svg.querySelector('#char > path:first-child');if(body)body.setAttribute('fill',outfit);
  const bangs=svg.querySelector('#headG > path[fill="url(#hairF)"]');
  if(bangs){
@@ -188,7 +191,7 @@ function answerQuiz(ans){
 async function execute(c){
  if(actionBusy)return status('Maya is handling another voice command.');actionBusy=true;
  try{
-  if(c.kind==='captionToggle'){cfg.captions=c.enabled;persist({captions:c.enabled});const p=$('mayaLiveCaptionHistory');if(p)p.hidden=!c.enabled;return status(c.enabled?'Live captions enabled from existing Maya transcription. No extra microphone.':'Live captions hidden; microphone and Maya call are unchanged.');}
+  if(c.kind==='captionToggle'){cfg.captions=c.enabled;persist({captions:c.enabled});const p=$('mayaLiveCaptionHistory');if(p)p.hidden=!c.enabled;const main=document.querySelector('.caps');if(main)main.style.display=c.enabled?'':'none';return status(c.enabled?'Live captions enabled from existing Maya transcription. No extra microphone.':'Live captions hidden; microphone and Maya call are unchanged.');}
   if(c.kind==='captionClear'){captionRows=[];lastSeen={user:'',maya:''};$('mayaLiveCaptionHistory')?.replaceChildren();return status('Session-only captions cleared.');}
   if(c.kind==='homeOn'||c.kind==='homeOff'||c.kind==='homeStatus')return await localHome(c.kind==='homeOn'?'ON':c.kind==='homeOff'?'OFF':'STATUS');
   if(c.kind==='routerOpen')return routerOpen();if(c.kind==='routerHelp')return routerHelp();
@@ -242,7 +245,7 @@ function mount(){
   button('Stop quiz',()=>execute({kind:'quizStop'})));
  const out=document.createElement('pre');out.id='mayaVoiceExtStatus';out.style.cssText='white-space:pre-wrap;overflow-wrap:anywhere;max-height:300px;overflow:auto';out.textContent='Try: Maya show captions / turn on smart light / open router settings / change hair to pink / start quiz on science. Requires live Maya speech recognition.';panel.append(out);
  host.append(button('Voice Control Center · Captions / Home / Router / Avatar / Quiz',()=>{panel.hidden=!panel.hidden;}),panel);
- avatar();watchCaptions();
+ avatar();const mainCaps=document.querySelector('.caps');if(mainCaps)mainCaps.style.display=cfg.captions?'':'none';watchCaptions();
 }
 function attach(){
  if(typeof window==='undefined'||!window.MayaLifeVoice||window.MayaLifeVoice.__v172)return;
