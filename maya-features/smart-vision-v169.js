@@ -32,7 +32,7 @@ export function parseReceiptLines(raw){
  else if(/\bUSD\b|\$/u.test(s))currency='USD';
  else if(/\bINR\b|₹/u.test(s))currency='INR';
  else if(/\bEUR\b|€/u.test(s))currency='EUR';
- const numeric=/(-?(?:\d{1,3}(?:,\d{3})+|\d{1,7})(?:\.\d{1,2})?)\s*$/u;
+ const numeric=/(-?(?:\d{1,3}(?:,\d{3})+|\d{1,7})(?:\.\d{1,2})?)\s*(?:AED|BDT|USD|INR|EUR|د\.إ|৳|\$|₹|€)?\s*$/iu;
  const excluded=/\b(?:subtotal|sub total|discount|tax|vat|change|balance|cash|card|paid|payment|invoice|receipt)\b/iu;
  for(const line of lines){
    const m=line.match(numeric);if(!m)continue;
