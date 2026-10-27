@@ -24,6 +24,7 @@ on:
       - 'native-v54/**'
       - 'native-local/**'
       - 'native-controls/**'
+      - 'native-vision/**'
       - 'native-voice-media/**'
       - 'native-auto-reply/**'
       - 'scripts/**'
@@ -81,6 +82,11 @@ jobs:
           test -s maya-features/android-controls-v167.js
           test -s native-controls/MayaAndroidControls.java
           test -s scripts/install-android-controls.py
+          test -s maya-features/smart-vision-v169.js
+          test -s native-vision/MayaDocumentPdf.java
+          test -s scripts/install-smart-vision.py
+          test -s tests/smart-vision-v169.test.mjs
+          test -s tests/smart-vision-native-check.py
           test -s native-visual/MayaVisualScan.java
           test -s scripts/install-visual-tools.py
           test -s scripts/install-local-tools.py
@@ -157,6 +163,8 @@ jobs:
           node tests/intelligence-v160.test.mjs
           node tests/android-controls.test.mjs
           python3 tests/android-controls-native-check.py
+          node tests/smart-vision-v169.test.mjs
+          python3 tests/smart-vision-native-check.py
           node tests/auto-reply.test.mjs
           python3 tests/native-screenshot-check.py
           for js in maya-features/*.js; do node --input-type=module --check < "$js"; done
@@ -208,6 +216,7 @@ jobs:
           test -s www/maya-features/voice-media-bridge.js
           test -s www/maya-features/v54-suite.js
           test -s www/maya-features/local-tools.js
+          test -s www/maya-features/smart-vision-v169.js
           test -s www/maya-features/v54-voice.js
           test -s www/maya-features/v54-voice-bridge.js
           test -s www/maya-features/productivity.js
@@ -248,6 +257,7 @@ jobs:
           python3 scripts/install-voice-media.py
           python3 scripts/install-auto-reply.py
           python3 scripts/install-android-controls.py
+          python3 scripts/install-smart-vision.py
           grep -Fq 'public String autoReply(String action, String json)' android/app/src/main/java/com/tanim/maya/MayaBridge.java
           grep -Fq 'MayaAutoReply.onMessage(this,sbn,m)' android/app/src/main/java/com/tanim/maya/MayaNotificationService.java
           test -s android/app/src/main/java/com/tanim/maya/MayaAutoReply.java
@@ -260,6 +270,8 @@ jobs:
           test -s android/app/src/main/java/com/tanim/maya/MayaLocalTools.java
           test -s android/app/src/main/java/com/tanim/maya/MayaVisualScan.java
           test -s android/app/src/main/java/com/tanim/maya/MayaAndroidControls.java
+          test -s android/app/src/main/java/com/tanim/maya/MayaDocumentPdf.java
+          grep -Fq 'public String documentPdf(String action, String json)' android/app/src/main/java/com/tanim/maya/MayaBridge.java
           grep -Fq 'public String androidControls(String action, String json)' android/app/src/main/java/com/tanim/maya/MayaBridge.java
           grep -Fq 'android.permission.BLUETOOTH_SCAN' android/app/src/main/AndroidManifest.xml
           grep -Fq 'public String visualScan(' android/app/src/main/java/com/tanim/maya/MayaBridge.java

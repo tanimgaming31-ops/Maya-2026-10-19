@@ -25,6 +25,8 @@ import './visual-life-tools.js';
 import './intelligence-v160.js';
 // Newest voice wrapper: Android Controls V167, no replacement of earlier Maya routes.
 import './android-controls-v167.js';
+// Maya Camera & Smart Vision V169: all 6 tools enter the existing voice router.
+import './smart-vision-v169.js';
 function init(){
   const host=document.querySelector('#setSheet .body');
   if(!host||document.getElementById('mayaAdvancedLink'))return;
