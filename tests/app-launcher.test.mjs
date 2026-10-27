@@ -6,6 +6,18 @@ assert.ok(!baseHtml.includes('Unknown app. Known apps:'),'Legacy Gemini OPEN_APP
 assert.ok(baseHtml.includes("kind:'installed-app'"),'Legacy Gemini OPEN_APP native route missing');
 assert.ok(baseHtml.includes('window.MayaInstalledApps.openNamedApp(plan.name)'),'Legacy Gemini OPEN_APP must use installed Android launcher');
 assert.ok(raw.includes('window.MayaInstalledApps=Object.freeze({openNamedApp})'),'Validated launcher bridge missing');
+const legacyLogic=baseHtml.match(/\/\/#LOGIC-START([\s\S]*?)\/\/#LOGIC-END/);
+assert.ok(legacyLogic,'Maya original pure phone action logic was not found');
+const legacy=new Function(legacyLogic[1]+'\nreturn {validateAction,planAction};')();
+for(const name of ['Binance','CapCut','Moto Camera','My Fitness App','ক্যালকুলেটর']){
+ const validation=legacy.validateAction({action:'OPEN_APP',app:name},Date.now(),new Set());
+ assert.equal(validation.ok,true,'Gemini should accept installed app display name: '+name);
+ assert.deepEqual(legacy.planAction(validation.action,validation.p,Date.now()),{kind:'installed-app',name});
+}
+for(const unsafe of ['https://bad.example','com.example.app','intent://something']){
+ assert.equal(legacy.validateAction({action:'OPEN_APP',app:unsafe},Date.now(),new Set()).ok,false,unsafe);
+}
+
 
 const m=await import('data:text/javascript;base64,'+Buffer.from(raw).toString('base64'));
 const parseCases=[
