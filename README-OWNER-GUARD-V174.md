@@ -2,6 +2,10 @@
 
 This feature is added to **the original Maya-2026-10-19** Android APK. It does not edit existing Maya Memory Packs, current avatar, Gemini settings, social/messaging code or other voice commands.
 
+## Working voice-first shortcut (V175+)
+
+Say **`Maya Security on করো`**, **`Maya security on`** or **`মায়া সিকিউরিটি অন করো`**. When the existing Maya microphone/voice engine is active, these commands directly invoke Android's real strong-biometric prompt. You do not need to open the Owner Guard Settings panel or tap a separate JavaScript confirmation. Owner Guard is **armed only after successful fingerprint or supported secure-face confirmation**; a spoken command alone does not silently bypass security. Voice activation leaves unverified-attempt camera photos **disabled** by default. Say **`Maya security off`** / **`মায়া সিকিউরিটি অফ করো`** to disarm with another successful OS biometric. If the voice microphone or OS biometric is unavailable, the app reports that it could not enable security. Maya does **not** detect every locked-phone pickup or film in the background.
+
 ## What it does
 
 - **Enable/disarm by voice + Android strong biometric:** say `Maya enable owner guard` / `মায়া ফোন পাহারা চালু করো`. This starts Android's **system BiometricPrompt** (an enrolled secure face **if accepted by the phone as a strong biometric**, or fingerprint). The registered biometric template stays with Android. This is NOT Maya identifying your unique face with its own model. The phone can authenticate **any enrolled biometric**, so review who is enrolled in Android Settings.
