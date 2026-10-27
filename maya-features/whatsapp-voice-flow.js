@@ -109,6 +109,8 @@ function mount(){
  const cancel=document.createElement('button');cancel.textContent='Cancel';cancel.className='btn';cancel.onclick=()=>{clear();show('WhatsApp message cancelled. Nothing sent.');};
  const yes=document.createElement('button');yes.id='mayaWhatsAppConfirm';yes.textContent='Confirm and send one message';yes.hidden=true;yes.className='btn';yes.onclick=()=>{void process('হ্যাঁ পাঠাও').then(show);};
  p.append(title,info,cancel,yes);document.body.append(p);refresh();
+ const t=document.createElement('button');t.className='btn';t.textContent='Check last WhatsApp attempt';t.onclick=()=>show(native('V66_STATUS').message||'No result');document.querySelector('#setSheet .body')?.append(t);
+
 }
 function install(){
  if(typeof window==='undefined'||!window.MayaLifeVoice||window.MayaLifeVoice.__whatsAppFlow)return;
