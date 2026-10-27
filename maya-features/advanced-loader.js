@@ -23,6 +23,8 @@ import './whatsapp-voice-flow.js';
 import './visual-life-tools.js';
 // Last: six permission-aware Intelligence features, preserving prior voice routes.
 import './intelligence-v160.js';
+// Newest voice wrapper: Android Controls V167, no replacement of earlier Maya routes.
+import './android-controls-v167.js';
 function init(){
   const host=document.querySelector('#setSheet .body');
   if(!host||document.getElementById('mayaAdvancedLink'))return;

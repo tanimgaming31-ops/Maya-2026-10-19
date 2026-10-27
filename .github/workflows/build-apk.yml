@@ -23,6 +23,7 @@ on:
       - 'native-app-launcher/**'
       - 'native-v54/**'
       - 'native-local/**'
+      - 'native-controls/**'
       - 'native-voice-media/**'
       - 'native-auto-reply/**'
       - 'scripts/**'
@@ -77,6 +78,9 @@ jobs:
           test -s maya-features/local-tools.js
           test -s maya-features/visual-life-tools.js
           test -s maya-features/intelligence-v160.js
+          test -s maya-features/android-controls-v167.js
+          test -s native-controls/MayaAndroidControls.java
+          test -s scripts/install-android-controls.py
           test -s native-visual/MayaVisualScan.java
           test -s scripts/install-visual-tools.py
           test -s scripts/install-local-tools.py
@@ -151,6 +155,8 @@ jobs:
           node tests/whatsapp-voice-flow.test.mjs
           node tests/visual-tools.test.mjs
           node tests/intelligence-v160.test.mjs
+          node tests/android-controls.test.mjs
+          python3 tests/android-controls-native-check.py
           node tests/auto-reply.test.mjs
           python3 tests/native-screenshot-check.py
           for js in maya-features/*.js; do node --input-type=module --check < "$js"; done
@@ -241,6 +247,7 @@ jobs:
           python3 scripts/install-visual-tools.py
           python3 scripts/install-voice-media.py
           python3 scripts/install-auto-reply.py
+          python3 scripts/install-android-controls.py
           grep -Fq 'public String autoReply(String action, String json)' android/app/src/main/java/com/tanim/maya/MayaBridge.java
           grep -Fq 'MayaAutoReply.onMessage(this,sbn,m)' android/app/src/main/java/com/tanim/maya/MayaNotificationService.java
           test -s android/app/src/main/java/com/tanim/maya/MayaAutoReply.java
@@ -252,6 +259,9 @@ jobs:
           test -s android/app/src/main/java/com/tanim/maya/MayaV54Macro.java
           test -s android/app/src/main/java/com/tanim/maya/MayaLocalTools.java
           test -s android/app/src/main/java/com/tanim/maya/MayaVisualScan.java
+          test -s android/app/src/main/java/com/tanim/maya/MayaAndroidControls.java
+          grep -Fq 'public String androidControls(String action, String json)' android/app/src/main/java/com/tanim/maya/MayaBridge.java
+          grep -Fq 'android.permission.BLUETOOTH_SCAN' android/app/src/main/AndroidManifest.xml
           grep -Fq 'public String visualScan(' android/app/src/main/java/com/tanim/maya/MayaBridge.java
           grep -Fq 'MayaLocalTools.run(ctx,act,action,input)' android/app/src/main/java/com/tanim/maya/MayaV54Bridge.java
           grep -Fq 'public String listLaunchableApps()' android/app/src/main/java/com/tanim/maya/MayaBridge.java
