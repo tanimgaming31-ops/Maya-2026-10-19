@@ -223,9 +223,10 @@ function mount(){
  const list=document.createElement('button');list.textContent='Find installed apps';list.className='btn';
  const store=document.createElement('button');store.textContent='Find in Google Play';store.className='btn';
  const bgNotify=document.createElement('button');bgNotify.id='mayaAppBgNotify';bgNotify.textContent='ব্যাকগ্রাউন্ড লঞ্চ নোটিফিকেশন চালু করো';bgNotify.className='btn';
+ const diagnose=document.createElement('button');diagnose.id='mayaAppVoiceStatus';diagnose.className='btn';diagnose.textContent='Last background voice app result';
  const count=document.createElement('p');count.id='mayaAppStatus';count.setAttribute('role','status');
  const suggestions=document.createElement('div');suggestions.id='mayaAppList';
- wrap.append(note,input,open,store,list,bgNotify,count,suggestions);
+ wrap.append(note,input,open,store,list,bgNotify,diagnose,count,suggestions);
  block.append(opener,wrap);host.append(block);
  const overlay=document.createElement('section');overlay.id='mayaAppChooser';overlay.hidden=true;
  overlay.style.cssText='position:fixed;z-index:100800;left:5%;right:5%;top:14%;max-height:70vh;overflow:auto;padding:14px;color:white;background:#111b30;border:1px solid #7199ff;border-radius:14px;box-shadow:0 12px 35px #000b';
@@ -262,6 +263,15 @@ function mount(){
    else if(response?.status==='blocked')say('নোটিফিকেশন বন্ধ আছে — Settings → Apps → Maya → Notifications থেকে চালু করো।');
    else say('এখন পারমিশন চাওয়া যায়নি; মায়া খোলা অবস্থায় আবার চাপো।');
   }catch(e){say('নোটিফিকেশন পারমিশন চাওয়া যায়নি: '+String(e?.message||e));}
+ };
+ diagnose.onclick=()=>{
+  try{
+   const native=typeof window!=='undefined'?window.MayaBridge:null;
+   if(typeof native?.appVoiceDiagnostics!=='function')return say('This diagnostic requires the updated Maya Android APK.');
+   const r=JSON.parse(native.appVoiceDiagnostics());
+   const when=r.time?new Date(r.time).toLocaleString():'never';
+   say('Background voice app command ('+when+'): '+String(r.last||r.message||'No result').slice(0,400));
+  }catch(e){say('App voice diagnostic unavailable: '+String(e?.message||e));}
  };
  open.onclick=async()=>{if(!input.value.trim())return say('Enter an app name first.');say(await openNamedApp(input.value.trim()));};
  store.onclick=async()=>{if(!input.value.trim())return say('Enter an app name first.');say(await openPlayStoreForApp(input.value.trim()));};
