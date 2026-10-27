@@ -1473,7 +1473,7 @@ const Live = {
 };
 function waitOnline() { return new Promise(res => { if (navigator.onLine) return res(); const h = () => { removeEventListener('online', h); res(); }; addEventListener('online', h); setTimeout(h, 300000); }); }
 
-function flushUser() { const t = app.userBuf.trim(); app.userBuf = ''; if (!t) return; if(window.MayaLifeVoice?.consumeLive(t)) { app.transcript.push({ r:'user', t }); if(app.transcript.length>80)app.transcript.shift(); return; } gate.noteUser(t); app.transcript.push({ r:'user', t }); if (app.transcript.length > 80) app.transcript.shift();
+function flushUser() { const t = app.userBuf.trim(); app.userBuf = ''; if (!t) return; if(consumeMayaCameraVoice(t)){app.transcript.push({r:'user',t});return;} if(window.MayaLifeVoice?.consumeLive(t)) { app.transcript.push({ r:'user', t }); if(app.transcript.length>80)app.transcript.shift(); return; } gate.noteUser(t); app.transcript.push({ r:'user', t }); if (app.transcript.length > 80) app.transcript.shift();
   const r = gate.afterUtterance(t); if (r === 'declined' || r === 'topic_changed') hidePending(); }
 function flushAi() { const t = app.aiBuf.trim(); app.aiBuf = ''; app.modelStarted = false; if (t) { app.transcript.push({ r:'maya', t }); if (app.transcript.length > 80) app.transcript.shift(); } }
 function firstModelOutput() { if (!app.modelStarted) { app.modelStarted = true; flushUser(); showYou(''); } if (app.state !== 'talking' && !app.skipAudio) { /* state follows audio */ } }
@@ -1792,16 +1792,64 @@ async function keepAwake(on) { try { if (on && S.keepAwake && navigator.wakeLock
 const Cam = {
   stream:null, facing:'environment', idle:0,
   get on() { return !!this.stream; },
+  opening:null,
   async enable() {
-    if (!await askPerm('camera', 'Turn on camera mode?', 'Maya will only look when you ask her what she sees, and one still frame is sent to Google for that. A red indicator stays on screen while the camera is on.')) return;
-    try { this.stream = await navigator.mediaDevices.getUserMedia({ video:{ facingMode:this.facing, width:{ ideal:960 } } }); } catch (e) { toast(e && e.name === 'NotAllowedError' ? 'Camera is blocked. Tap the lock icon in Chrome’s address bar → Permissions → Camera.' : 'Could not start the camera.', 'err', 5000); return; }
-    const v = $('#camVideo'); v.srcObject = this.stream; await v.play().catch(() => {}); $('#cam').classList.add('on'); $('#btnCam').classList.add('on'); this.bump(); toast('Camera on. Ask “what do you see?”', 'ok');
+    if (this.on) { $('#cam').classList.add('on'); this.bump(); return true; }
+    if (this.opening) return this.opening;
+    this.opening = this.start();
+    try { return await this.opening; } finally { this.opening=null; }
   },
-  disable() { if (this.stream) this.stream.getTracks().forEach(t => t.stop()); this.stream = null; $('#camVideo').srcObject = null; $('#cam').classList.remove('on'); $('#btnCam').classList.remove('on'); clearTimeout(this.idle); },
+  async start() {
+    if (!await askPerm('camera', 'Turn on Maya full-screen camera?', 'Camera preview stays on your phone. Only if you separately ask what Maya sees will one frame be sent to Gemini.')) return false;
+    try {
+      const stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:this.facing,width:{ideal:960}},audio:false});
+      this.stream=stream;
+      const v=$('#camVideo');v.srcObject=stream;
+      await v.play().catch(()=>{});
+      $('#cam').classList.add('on');$('#btnCam').classList.add('on');
+      $('#camInd').textContent='● CAMERA ON';
+      this.bump();
+      toast('Full-screen camera on. Ask “what do you see?”', 'ok');
+      return true;
+    } catch(e) {
+      this.disable();
+      toast(e && e.name==='NotAllowedError'?'Camera permission blocked. Allow camera access in Android app settings.':'Could not start Maya camera.', 'err', 5000);
+      return false;
+    }
+  },
+  disable() {
+    if(this.stream)this.stream.getTracks().forEach(t=>t.stop());
+    this.stream=null;$('#camVideo').srcObject=null;
+    $('#cam').classList.remove('on');$('#btnCam').classList.remove('on');
+    $('#camInd').textContent='● CAMERA ON';
+    clearTimeout(this.idle);
+  },
   bump() { clearTimeout(this.idle); this.idle = setTimeout(() => { this.disable(); toast('Camera turned off after a while.', '', 2500); }, 150000); },
-  async flip() { this.facing = this.facing === 'environment' ? 'user' : 'environment'; this.disable(); await this.enable(); },
+  async flip() { if(!this.on)return false; this.facing=this.facing==='environment'?'user':'environment';this.disable();return await this.enable(); },
   frame() { const v = $('#camVideo'); if (!v.videoWidth) return null; const sc = Math.min(1, 640 / Math.max(v.videoWidth, v.videoHeight)); const c = document.createElement('canvas'); c.width = Math.round(v.videoWidth * sc); c.height = Math.round(v.videoHeight * sc); c.getContext('2d').drawImage(v, 0, 0, c.width, c.height); return c.toDataURL('image/jpeg', .72).split(',')[1]; }
 };
+/** Opening the camera never turns on the microphone and never sends a frame.
+ * Voice commands are dispatched locally before the Gemini conversation route.
+ * They retain the existing call state so Maya can keep listening while preview is open. */
+async function executeMayaCameraCommand(action) {
+  if(action==='open'){
+    const opened=await Cam.enable();
+    return opened?'ক্যামেরা ফুল স্ক্রিনে খুলেছি।':'ক্যামেরা খোলা যায়নি। অনুমতি পরীক্ষা করো।';
+  }
+  if(action==='close'){Cam.disable();return 'ক্যামেরা বন্ধ করেছি।';}
+  if(action==='flip'){
+    const flipped=await Cam.flip();
+    return flipped?'ক্যামেরা ঘুরিয়েছি।':'আগে ক্যামেরা চালু করো।';
+  }
+  return '';
+}
+function consumeMayaCameraVoice(text){
+  const action=parseMayaCameraCommand(text);
+  if(!action)return false;
+  void executeMayaCameraCommand(action).then(msg=>{if(msg)showSub(msg);})
+    .catch(()=>showSub('Camera action failed.'));
+  return true;
+}
 async function cameraLook() {
   if (!Cam.on) return { status:'camera_off', reason:'The camera is off. Sweetly ask the person to tap the camera button at the top first.' };
   const b = Cam.frame(); if (!b) return { status:'not_ready', reason:'The camera is still warming up. Ask them to wait a second and ask again.' };
@@ -1827,6 +1875,13 @@ const FB = {
     try { r.start(); } catch (e) { this.rec = null; setTimeout(() => this.listen(), 600); }
   },
   async handle(text) {
+    const cameraAction=parseMayaCameraCommand(text);
+    if(cameraAction){
+      this.busy=true;setState('thinking');
+      try{const answer=await executeMayaCameraCommand(cameraAction);showSub(answer);if(this.active)await this.speak(answer);}
+      finally{this.busy=false;if(this.active)this.listen();}
+      return;
+    }
     if(window.MayaLifeVoice?.recognizes(text)) {
       this.busy = true; setState('thinking');
       try { const result = await window.MayaLifeVoice.runLifeVoice(window.MayaLifeVoice.parseLifeVoice(text)); showSub(result); if(this.active)await this.speak(result); }
@@ -1908,6 +1963,7 @@ function endCall(silent) {
 }
 async function sendTyped() {
   const t = $('#txt').value.trim(); if (!t) return; $('#txt').value = '';
+  if(consumeMayaCameraVoice(t)){showYou(t);return;}
   if(window.MayaLifeVoice?.consumeTyped(t)) { showYou(t); return; }
   if(isMayaFeatureReportQuestion(t)) { showYou(t); const report=await collectMayaFeatureReport(); showMayaFeatureReport(report,true); showSub(mayaFeatureReportSummary());return; }
   const direct=mayaDirectPhoneCommand(t);
@@ -2342,7 +2398,9 @@ $('#btnMute').onclick = () => { app.muted = !app.muted; $('#btnMute').classList.
 $('#send').onclick = sendTyped; $('#txt').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); sendTyped(); } });
 $('#btnSet').onclick = () => {openSheet('setSheet');refreshV2();}; $('#btnMem').onclick = () => openSheet('memSheet'); $('#openMem').onclick = () => { closeSheet('setSheet'); openSheet('memSheet'); };
 $$('[data-close]').forEach(b => b.onclick = () => closeSheet(b.dataset.close)); $$('.sheet').forEach(s => s.addEventListener('click', e => { if (e.target === s && s.id !== 'dlg') s.classList.remove('open'); }));
-$('#btnCam').onclick = () => { if (Cam.on) Cam.disable(); else Cam.enable(); }; $('#camFlip').onclick = () => Cam.flip();
+$('#btnCam').onclick = () => { if (Cam.on) Cam.disable(); else void Cam.enable(); };
+$('#camFlip').onclick = () => { void Cam.flip(); };
+$('#camClose').onclick = () => Cam.disable();
 addEventListener('offline', () => { showBanner('You are offline. Maya will reconnect when the internet is back.'); });
 addEventListener('online', () => { hideBanner(); });
 document.addEventListener('visibilitychange', () => { if (!document.hidden) { refreshNative(); refreshV2(); checkNudge(); if (app.active && app.mode === 'live' && !Live.ready && !Live.reconnecting) Live.reconnect(); if (S.wake && !app.active) Wake.sync(); if (app.active || Timers.list.length) keepAwake(true); } });
