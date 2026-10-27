@@ -144,6 +144,7 @@ jobs:
           node tests/voice-screenshot.test.cjs
           node tests/local-tools.test.mjs
           node tests/media-voice.test.mjs
+          node tests/whatsapp-voice-flow.test.mjs
           node tests/auto-reply.test.mjs
           python3 tests/native-screenshot-check.py
           for js in maya-features/*.js; do node --input-type=module --check < "$js"; done
