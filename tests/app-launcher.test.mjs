@@ -1,6 +1,12 @@
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 const raw=readFileSync(new URL('../maya-features/app-launcher.js',import.meta.url),'utf8');
+const baseHtml=readFileSync(new URL('../index.html',import.meta.url),'utf8');
+assert.ok(!baseHtml.includes('Unknown app. Known apps:'),'Legacy Gemini OPEN_APP must not reject names outside social app list');
+assert.ok(baseHtml.includes("kind:'installed-app'"),'Legacy Gemini OPEN_APP native route missing');
+assert.ok(baseHtml.includes('window.MayaInstalledApps.openNamedApp(plan.name)'),'Legacy Gemini OPEN_APP must use installed Android launcher');
+assert.ok(raw.includes('window.MayaInstalledApps=Object.freeze({openNamedApp})'),'Validated launcher bridge missing');
+
 const m=await import('data:text/javascript;base64,'+Buffer.from(raw).toString('base64'));
 const parseCases=[
  ['open WhatsApp','WhatsApp'],
