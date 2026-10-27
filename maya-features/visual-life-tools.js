@@ -83,6 +83,7 @@ function mount(){
  wrapper.append(button('Read clipboard',async()=>{try{clipboard.value=(await navigator.clipboard.readText()).slice(0,4000);tell('Clipboard loaded on tap.');}catch{tell('Clipboard unavailable. Paste manually.');}}));
  wrapper.append(button('Clean text',()=>{clipboard.value=clipboard.value.trim().replace(/[ \t]+/g,' ').replace(/\n{3,}/g,'\n\n');tell('Text cleaned offline.');}));
  wrapper.append(button('Copy text',async()=>{try{await navigator.clipboard.writeText(clipboard.value);tell('Copied.');}catch{tell('Clipboard write unavailable.');}}));
+ wrapper.append(button('Translate with Gemini',async()=>{const t=clipboard.value.trim();if(!t||t.length>500){tell('Translation accepts 1 to 500 characters.');return;}const lang='English';try{const x=await window.MayaWhatsAppTranslator.translate(t,lang);if(x){clipboard.value=x;tell('Translated into English. Review before copying.');}}catch(e){tell('Translation failed. Original text is unchanged.');}}));
  const keyboard=el('h4');keyboard.textContent='Maya AI Keyboard';wrapper.append(keyboard);
  const info=el('p');info.textContent='Separate keyboard app. Android requires you to install, enable and select it. No private typing is shared with Maya.';wrapper.append(info);
  wrapper.append(button('Open keyboard settings',()=>{try{const r=JSON.parse(window.MayaBridge.openKeyboardSettings());tell(r.status==='opened'?'Android keyboard settings opened.':'Keyboard settings unavailable.');}catch{tell('Only available inside the Android APK.');}}));
