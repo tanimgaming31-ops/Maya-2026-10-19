@@ -21,6 +21,8 @@ import './local-tools.js';
 // Last voice wrapper: WhatsApp name → dictation → language → approval.
 import './whatsapp-voice-flow.js';
 import './visual-life-tools.js';
+// Last: six permission-aware Intelligence features, preserving prior voice routes.
+import './intelligence-v160.js';
 function init(){
   const host=document.querySelector('#setSheet .body');
   if(!host||document.getElementById('mayaAdvancedLink'))return;
