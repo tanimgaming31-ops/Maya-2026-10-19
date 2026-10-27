@@ -26,6 +26,7 @@ on:
       - 'native-controls/**'
       - 'native-vision/**'
       - 'native-home/**'
+      - 'native-owner/**'
       - 'native-voice-media/**'
       - 'native-auto-reply/**'
       - 'scripts/**'
@@ -89,6 +90,11 @@ jobs:
           test -s maya-features/voice-first-v172.js
           test -s native-home/MayaHomeControl.java
           test -s scripts/install-home-voice.py
+          test -s maya-features/owner-guard-v174.js
+          test -s native-owner/MayaOwnerGuard.java
+          test -s scripts/install-owner-guard.py
+          test -s tests/owner-guard-v174.test.mjs
+          test -s tests/owner-guard-native-check.py
           test -s tests/voice-first-v172.test.mjs
           test -s tests/home-voice-native-check.py
           test -s tests/smart-vision-v169.test.mjs
@@ -173,6 +179,8 @@ jobs:
           python3 tests/smart-vision-native-check.py
           node tests/voice-first-v172.test.mjs
           python3 tests/home-voice-native-check.py
+          node tests/owner-guard-v174.test.mjs
+          python3 tests/owner-guard-native-check.py
           node tests/auto-reply.test.mjs
           python3 tests/native-screenshot-check.py
           for js in maya-features/*.js; do node --input-type=module --check < "$js"; done
@@ -226,6 +234,7 @@ jobs:
           test -s www/maya-features/local-tools.js
           test -s www/maya-features/smart-vision-v169.js
           test -s www/maya-features/voice-first-v172.js
+          test -s www/maya-features/owner-guard-v174.js
           test -s www/maya-features/v54-voice.js
           test -s www/maya-features/v54-voice-bridge.js
           test -s www/maya-features/productivity.js
@@ -268,6 +277,7 @@ jobs:
           python3 scripts/install-android-controls.py
           python3 scripts/install-smart-vision.py
           python3 scripts/install-home-voice.py
+          python3 scripts/install-owner-guard.py
           grep -Fq 'public String autoReply(String action, String json)' android/app/src/main/java/com/tanim/maya/MayaBridge.java
           grep -Fq 'MayaAutoReply.onMessage(this,sbn,m)' android/app/src/main/java/com/tanim/maya/MayaNotificationService.java
           test -s android/app/src/main/java/com/tanim/maya/MayaAutoReply.java
@@ -282,6 +292,9 @@ jobs:
           test -s android/app/src/main/java/com/tanim/maya/MayaAndroidControls.java
           test -s android/app/src/main/java/com/tanim/maya/MayaDocumentPdf.java
           test -s android/app/src/main/java/com/tanim/maya/MayaHomeControl.java
+          test -s android/app/src/main/java/com/tanim/maya/MayaOwnerGuard.java
+          grep -Fq 'public String ownerGuard(String action, String json)' android/app/src/main/java/com/tanim/maya/MayaBridge.java
+          grep -Fq 'android.permission.USE_BIOMETRIC' android/app/src/main/AndroidManifest.xml
           grep -Fq 'public String homeControl(String action, String json)' android/app/src/main/java/com/tanim/maya/MayaBridge.java
           grep -Fq 'public String documentPdf(String action, String json)' android/app/src/main/java/com/tanim/maya/MayaBridge.java
           grep -Fq 'public String androidControls(String action, String json)' android/app/src/main/java/com/tanim/maya/MayaBridge.java

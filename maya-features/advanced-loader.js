@@ -29,6 +29,8 @@ import './android-controls-v167.js';
 import './smart-vision-v169.js';
 // V172 adds real Voice dispatch for captions, local home, router guides, original 2D avatar and study quiz.
 import './voice-first-v172.js';
+// V174 opt-in owner verification + private, visible capture (never background face surveillance).
+import './owner-guard-v174.js';
 function init(){
   const host=document.querySelector('#setSheet .body');
   if(!host||document.getElementById('mayaAdvancedLink'))return;
