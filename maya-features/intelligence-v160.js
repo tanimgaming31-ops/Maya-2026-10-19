@@ -170,7 +170,12 @@ function openPanel(target){
  const p=$('mayaIntelPanel');if(!p)return false;
  const sheet=$('setSheet');if(sheet&&!sheet.classList.contains('open'))$('btnSet')?.click();
  p.hidden=false;
- if(target)$('mayaIntelTarget').value=target;
+ if(target){
+  $('mayaIntelTarget').value=target;
+  const idx={diagnostics:0,summary:2,knowledge:3,decision:4,voiceNote:5}[target];
+  const section=Number.isInteger(idx)?p.querySelectorAll('details')[idx]:null;
+  if(section)section.open=true;
+ }
  p.scrollIntoView({block:'nearest'});
  return true;
 }
