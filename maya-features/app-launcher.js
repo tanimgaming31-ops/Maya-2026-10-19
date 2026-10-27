@@ -277,4 +277,7 @@ function mount(){
  store.onclick=async()=>{if(!input.value.trim())return say('Enter an app name first.');say(await openPlayStoreForApp(input.value.trim()));};
  input.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();open.click();}});
 }
+// Expose only the existing validated, user-initiated launcher to the original
+// Gemini OPEN_APP tool. The previous 22-app web fallback is not a device limit.
+if(typeof window!=='undefined')window.MayaInstalledApps=Object.freeze({openNamedApp});
 if(typeof document!=='undefined'){if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',mount,{once:true});else mount();}
