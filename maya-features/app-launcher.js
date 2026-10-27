@@ -9,7 +9,12 @@ const aliases={
  'টেলিগ্রাম':'telegram','গ্যালারি':'gallery','ক্যামেরা':'camera','সেটিংস':'settings',
  'জিমেইল':'gmail','গুগল ম্যাপস':'maps','ম্যাপস':'maps','প্লে স্টোর':'play store',
  'প্লেস্টোর':'play store','বাইন্যান্স':'binance','ক্যালকুলেটর':'calculator',
- 'চ্যাটজিপিটি':'chatgpt','স্পটিফাই':'spotify','স্ন্যাপচ্যাট':'snapchat'
+ 'চ্যাটজিপিটি':'chatgpt','স্পটিফাই':'spotify','স্ন্যাপচ্যাট':'snapchat',
+ 'ইন্সটাগ্রাম':'instagram','ইন্সটা':'instagram','হোয়াটস্যাপ':'whatsapp',
+ 'ফেইসবুক':'facebook','ফেসবুক মেসেঞ্জার':'messenger',
+ 'facebook messenger':'messenger','google play':'play store',
+ 'google play store':'play store','গুগল প্লে স্টোর':'play store',
+ 'গুগল প্লে':'play store','মোটো ক্যামেরা':'camera','মোটোরোলা ক্যামেরা':'camera'
 };
 export function normalizeName(value){
  return String(value||'').normalize('NFKC').toLocaleLowerCase().replace(/[^\p{L}\p{M}\p{N}]+/gu,' ').replace(/\s+/gu,' ').trim();
@@ -30,16 +35,30 @@ export function parseOpenAppCommand(raw){
   return {kind:'appInstall',name};
  }
  let m=t.match(/^(?:open|launch|start|run)\s+(?:(?:the|my)\s+)?(?:app\s+)?(.+?)(?:\s+app)?$/iu);
- if(!m)m=t.match(/^(.+?)\s+(?:খোলো|খুলে দাও|খুলে দিও|চালু করো|চালু করে দাও|ওপেন করো|ওপেন করে দাও)$/u);
+ if(!m)m=t.match(/^(?:খোলো|ওপেন করো|খুলে দাও|চালু করো)\s+(.+)$/u);
+ if(!m)m=t.match(/^(.+?)\s+(?:খোলো|খুলে দাও|খুলে দিও|খুলবে|চালাও|চালু করো|চালু করে দাও|ওপেন করো|ওপেন করে দাও)$/u);
  if(!m)return null;
  const name=String(m[1]).trim().replace(/^[“"'‘]+|[”"'’]+$/gu,'').trim();
  if(!name||name.length>100||!targetName(name))return null;
  return {kind:'appLaunch',name};
 }
+// Package identities only help select entries that Android actually enumerated.
+ // They NEVER authorize blind package launching, installation, or account access.
+const preferredPackages={
+ 'whatsapp':['com.whatsapp'],'whatsapp business':['com.whatsapp.w4b'],
+ 'imo':['com.imo.android.imoim','com.imo.android.imous'],
+ 'instagram':['com.instagram.android'],'facebook':['com.facebook.katana','com.facebook.lite'],
+ 'messenger':['com.facebook.orca','com.facebook.mlite'],
+ 'play store':['com.android.vending'],
+ 'camera':['com.motorola.camera3','com.android.camera2','com.google.android.GoogleCamera','org.codeaurora.snapcam'],
+ 'youtube':['com.google.android.youtube'],
+ 'chrome':['com.android.chrome'],'maps':['com.google.android.apps.maps']
+};
 export function rankedMatches(query,apps){
  if(!Array.isArray(apps))return [];
- const target=normalizeName(targetName(query));
- if(!target||target.length<2)return [];
+ const canonical=targetName(query),target=normalizeName(canonical);
+ if(!target||target.length<2||/^[a-z0-9_]+(?:\.[a-z0-9_]+)+$/i.test(String(query).trim()))return [];
+ const preferred=preferredPackages[canonical]||[];
  const scored=[];
  for(const a of apps){
   if(!a||typeof a.label!=='string'||typeof a.packageName!=='string'||typeof a.activityName!=='string')continue;
@@ -48,6 +67,7 @@ export function rankedMatches(query,apps){
   if(label===target)score=120;
   else if(label.startsWith(target+' '))score=95;
   else if(label.includes(' '+target+' ')||label.endsWith(' '+target))score=80;
+  if(preferred.includes(a.packageName))score=Math.max(score,114);
   if(score)scored.push({...a,score});
  }
  return scored.sort((a,b)=>b.score-a.score||a.label.localeCompare(b.label)||a.packageName.localeCompare(b.packageName)).slice(0,30);
@@ -181,7 +201,10 @@ export async function openNamedApp(name){
    if(close.length)return await choose(close,'নামটা হুবহু মেলেনি: "'+String(name).slice(0,80)+'"। এইটা কি বুঝিয়েছ? খুলতে নামে ট্যাপ করো — ট্যাপ না করা পর্যন্ত কোনো অ্যাপ খোলবে না।');
    return 'No visible installed app named "'+String(name).slice(0,80)+'". Check spelling or the Installed Apps list in Maya Settings.';
   }
-  if(found[0].score===120&&(found.length===1||found[1].score<120))return nativeOpen(found[0]);
+  // A single clearly named app opens on the spoken command; only genuinely
+  // ambiguous choices require a tap (including duplicate camera/activity labels).
+  const best=found[0],runnerUp=found[1];
+  if(best.score>=80&&(!runnerUp||best.score>runnerUp.score))return nativeOpen(best);
   return await choose(found,'Which installed app did you mean? Tap its name to open. No app will open until selected.');
  }catch(e){return String(e?.message||e);}
 }
@@ -193,7 +216,7 @@ function mount(){
  opener.textContent='Installed Apps • Open by Name';
  const wrap=document.createElement('section');wrap.hidden=true;
  const note=document.createElement('p');note.className='note';
- note.textContent='Open installed apps from Maya. Say "Maya, open WhatsApp" / "মায়া, ইমো খোলো" in Maya Voice Call, or type in chat. Say "Maya, install WhatsApp" to open the matching Play Store listing (you must tap Install yourself). Enable Unified Life Voice in Settings. Android system may hide some apps or separate work profiles. No QUERY_ALL_PACKAGES.';
+ note.textContent='Say “Maya open WhatsApp”, “মায়া ইনস্টাগ্রাম খোলো”, “মায়া ফেসবুক ওপেন করো”, or any installed visible app name. Turn ON Unified Life Voice in Settings first. One clear match opens directly; duplicate names require choosing the right app. If Maya is behind another app, Android may require tapping the launch notification. Clone/work-profile apps may not be visible. No broad app permissions.';
  const input=document.createElement('input');input.id='mayaAppName';input.className='inp wide';input.maxLength=100;
  input.placeholder='Installed app name (e.g. WhatsApp)';
  const open=document.createElement('button');open.textContent='Open by name';open.className='btn pri';
