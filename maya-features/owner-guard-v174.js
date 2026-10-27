@@ -8,6 +8,9 @@ export function parseOwnerGuardVoice(text){
  const m=raw.match(/^(?:(?:hey\s+)?maya|মায়া|মায়া)\s*[,،:]?\s+(.+)$/iu);
  if(!m||m[1].length>150)return null;
  const t=m[1];
+ // Voice-first exact security commands, with conservative parsing to avoid accidental arming.
+ if(/^(?:(?:turn|switch)\s+on\s+(?:my\s+)?(?:security|owner guard|phone security)|(?:security|owner guard|phone security)\s+(?:on|enable|start|activate)|(?:security|সিকিউরিটি)\s+(?:on|অন)\s+করো|(?:সিকিউরিটি|সিকিউরিটি গার্ড|ফোন সিকিউরিটি|সিকিউরিটি মোড)\s+(?:অন(?:\s+করো)?|চালু\s+করো))$/iu.test(t))return {kind:'enable'};
+ if(/^(?:(?:turn|switch)\s+off\s+(?:my\s+)?(?:security|owner guard|phone security)|(?:security|owner guard|phone security)\s+(?:off|disable|stop|deactivate)|(?:security|সিকিউরিটি)\s+(?:off|অফ)\s+করো|(?:সিকিউরিটি|সিকিউরিটি গার্ড|ফোন সিকিউরিটি|সিকিউরিটি মোড)\s+(?:অফ(?:\s+করো)?|বন্ধ\s+করো))$/iu.test(t))return {kind:'disable'};
  if(/^(?:enable|arm|activate|start) (?:my )?(?:owner guard|phone guard|anti.theft guard)|^(?:ফোন পাহারা|মালিক পাহারা) (?:চালু করো|শুরু করো)$/iu.test(t))return {kind:'enable'};
  if(/^(?:disable|disarm|stop|turn off) (?:my )?(?:owner guard|phone guard)|^(?:ফোন পাহারা|মালিক পাহারা) (?:বন্ধ করো|বাতিল করো)$/iu.test(t))return {kind:'disable'};
  if(/^(?:verify (?:the )?owner|verify me|check owner|owner verification|^(?:আমাকে চিনো|আমার পরিচয় যাচাই করো|মালিক যাচাই করো))$/iu.test(t))return {kind:'verify'};
@@ -72,21 +75,25 @@ async function awaitAuth(accepted,mode){
  }
  return report('Android biometric prompt did not finish. No identity decision.');
 }
-async function verify(mode='verify'){
+async function verify(mode='verify',source='voice'){
  if(working)return report('Owner Guard operation already running.');
  working=true;
  try{
   if(mode==='enable'){
-   const capture=!!$('mayaGuardCapture')?.checked;
-   const msg='Enable Owner Guard? When Maya is in the foreground it can request Android strong biometrics. '+
-   (capture?'After an unverified check, Maya may visibly activate the front camera and save one app-private photo.':'No unverified-attempt photos will be captured.')+
-   ' Locked phone pickup and background camera monitoring are NOT provided.';
-   if(!confirm(msg))return report('Not enabled.');
-   const x=native('ENABLE',{capture});return await awaitAuth(x,mode);
+   const now=native('STATUS');
+   if(now.status==='ok'&&now.armed)return report('Maya Security is already ON. Owner Guard covers foreground Maya, not phone pickup or the lock screen.');
+   // No extra JS prompt: the secure Android biometric dialog is itself required.
+   // A voice request never opts into camera capture. UI opt-in is separate.
+   const capture=source==='button'&&!!$('mayaGuardCapture')?.checked;
+   const x=native('ENABLE',{capture});
+   if(x.status==='pending')report('Security ON requested. Verify your fingerprint or supported secure face in the Android system dialog.');
+   return await awaitAuth(x,mode);
   }
   if(mode==='disable'){
-   if(!confirm('Disable the foreground-only Owner Guard after verifying your identity? Photos will remain in private storage.'))return report('Cancel.');
-   return await awaitAuth(native('DISABLE'),mode);
+   if(source==='button'&&!confirm('Disable Owner Guard after Android biometric verification? Saved photos will remain.'))return report('Cancelled.');
+   const x=native('DISABLE');
+   if(x.status==='pending')report('Security OFF requested. Confirm your identity in the Android system dialog.');
+   return await awaitAuth(x,mode);
   }
   if(mode==='reference'){
    const x=native('VIEW_AUTH');
@@ -185,7 +192,7 @@ function mount(){
  captureRow.append(toggle,document.createTextNode(' Allow one VISIBLE front-camera snapshot after unverified Maya-foreground biometric check. OFF by default. Local-only; no cloud.'));
  panelElement.append(captureRow);
  const b=(label,fn)=>{const x=document.createElement('button');x.type='button';x.className='btn';x.textContent=label;x.onclick=()=>Promise.resolve(fn()).catch(e=>report('Owner Guard error: '+short(e.message,150)));return x;};
- panelElement.append(b('Enable Guard (biometric required)',()=>verify('enable')),b('Check / verify owner now',()=>verify('verify')),b('Change photo-capture setting (verify)',()=>verify('captureSetting')),b('Disable Guard (verify)',()=>verify('disable')));
+ panelElement.append(b('Enable Guard (biometric required)',()=>verify('enable','button')),b('Check / verify owner now',()=>verify('verify')),b('Change photo-capture setting (verify)',()=>verify('captureSetting')),b('Disable Guard (verify)',()=>verify('disable','button')));
  const preview=document.createElement('div');preview.id='mayaGuardCameraBox';preview.hidden=true;
  const v=document.createElement('video');v.id='mayaGuardVideo';v.autoplay=true;v.muted=true;v.playsInline=true;
  v.style.cssText='display:block;width:100%;max-width:320px;min-height:150px;border:2px solid #f66';preview.append(v);
@@ -207,11 +214,11 @@ function mount(){
 async function dispatch(c){
  if(c.kind==='panel'){panel();return report('Owner Guard settings opened.');}
  if(c.kind==='status'){const r=refresh();return report(r.status==='ok'?'Owner Guard '+(r.armed?'enabled':'disabled')+'; photo-on-unverified '+(r.capture?'ON':'OFF')+'; '+r.photoCount+' app-private attempts. No automatic locked-screen protection.':r.message);}
- panel();if(c.kind==='enable')return verify('enable');
- if(c.kind==='disable')return verify('disable');
+ if(c.kind==='enable')return verify('enable','voice');
+ if(c.kind==='disable')return verify('disable','voice');
  if(c.kind==='verify')return verify('verify');
- if(c.kind==='reference')return verify('reference');
- if(c.kind==='photos')return verify('photos');
+ if(c.kind==='reference'){panel();return verify('reference');}
+ if(c.kind==='photos'){panel();return verify('photos');}
 }
 function attachVoice(){
  if(typeof window==='undefined'||!window.MayaLifeVoice||window.MayaLifeVoice.__ownerGuard174)return;
