@@ -15,6 +15,9 @@ const parseCases=[
  ['ইউটিউব ওপেন করো','ইউটিউব'],
  ['ফেসবুকটা খোলো','ফেসবুকটা'],
  ['গুগল ম্যাপস খুলে দাও','গুগল ম্যাপস'],
+ ['ওপেন করো ইনস্টাগ্রাম','ইনস্টাগ্রাম'],
+ ['ক্যামেরা চালাও','ক্যামেরা'],
+ ['গুগল প্লে স্টোর খোলো','গুগল প্লে স্টোর'],
 ];
 for(const [phrase,name] of parseCases)assert.equal(m.parseOpenAppCommand(phrase)?.name,name,phrase);
 for(const [voice,name] of [
@@ -33,7 +36,7 @@ for(const phrase of ['','whatsapp','tell me about whatsapp','send WhatsApp messa
  if(phrase==='open life')continue; // valid ambiguous app phrase, native must decide
  assert.equal(m.parseOpenAppCommand(phrase),null,phrase);
 }
-for(const [raw,canonical] of Object.entries({'ইমো':'imo','হোয়াটসঅ্যাপ':'whatsapp','হোয়াটসঅ্যাপ বিজনেস':'whatsapp business','মেসেঞ্জার':'messenger','ইনস্টাগ্রাম':'instagram','প্লে স্টোর':'play store','গুগল ম্যাপস':'maps','ক্যামেরা':'camera','ফেসবুকটা':'facebook'}))assert.equal(m.targetName(raw),canonical,raw);
+for(const [raw,canonical] of Object.entries({'ইমো':'imo','হোয়াটসঅ্যাপ':'whatsapp','হোয়াটসঅ্যাপ বিজনেস':'whatsapp business','মেসেঞ্জার':'messenger','ইনস্টাগ্রাম':'instagram','প্লে স্টোর':'play store','গুগল ম্যাপস':'maps','ক্যামেরা':'camera','ফেসবুকটা':'facebook','ইন্সটাগ্রাম':'instagram','ফেসবুক মেসেঞ্জার':'messenger','গুগল প্লে স্টোর':'play store'}))assert.equal(m.targetName(raw),canonical,raw);
 const apps=[
  {label:'WhatsApp',packageName:'com.whatsapp',activityName:'com.whatsapp.Main'},
  {label:'WhatsApp Business',packageName:'com.whatsapp.w4b',activityName:'com.whatsapp.w4b.Main'},
@@ -53,6 +56,20 @@ assert.equal(m.rankedMatches('ম্যাপস',apps)[0].label,'Google Maps');
 assert.equal(m.rankedMatches('ক্যামেরা',apps).length,2); // user must choose duplicate
 assert.equal(m.rankedMatches('com.whatsapp',apps).length,0); // no package guessing
 assert.equal(m.rankedMatches('no such app',apps).length,0);
+const deviceApps=[
+ {label:'Moto Camera',packageName:'com.motorola.camera3',activityName:'com.motorola.camera3.Main'},
+ {label:'Google Play Store',packageName:'com.android.vending',activityName:'com.android.vending.AssetBrowserActivity'},
+ {label:'Instagram',packageName:'com.instagram.android',activityName:'com.instagram.android.Main'},
+ {label:'Facebook',packageName:'com.facebook.katana',activityName:'com.facebook.katana.Main'},
+ {label:'Messenger',packageName:'com.facebook.orca',activityName:'com.facebook.orca.Main'},
+ {label:'My Fitness App',packageName:'com.example.fitness',activityName:'com.example.fitness.Main'}
+];
+for(const [spoken,pkg] of [
+ ['ক্যামেরা','com.motorola.camera3'],['প্লে স্টোর','com.android.vending'],
+ ['ইন্সটাগ্রাম','com.instagram.android'],['ফেসবুক','com.facebook.katana'],
+ ['ফেসবুক মেসেঞ্জার','com.facebook.orca'],
+ ['my fitness','com.example.fitness']])
+ assert.equal(m.rankedMatches(spoken,deviceApps)[0]?.packageName,pkg,spoken);
 assert.equal(m.rankedMatches('whatever',[{label:'Whatever',packageName:null}]).length,0);
 assert.equal(m.normalizeName('  Google—Maps  '),'google maps');
 const bridge=readFileSync(new URL('../maya-features/life-voice.js',import.meta.url),'utf8');
@@ -224,6 +241,14 @@ assert.ok(registry['mayaAppStatus'].textContent.includes('Allow'),'permission re
 notifyPermissionStatus={status:'blocked'};
 registry['mayaAppBgNotify'].onclick();
 assert.ok(registry['mayaAppStatus'].textContent.includes('Notifications'),'blocked notification status missing');
+// A unique non-exact visible app name (e.g. Google Maps) now opens by voice
+// without a second on-screen chooser tap.
+const uniqueBefore=launchCalls.length;
+assert.equal(await m2.openNamedApp('ম্যাপস'),'Android launch requested: Google Maps.');
+assert.deepEqual(launchCalls[uniqueBefore],['com.google.android.apps.maps','x']);
+assert.ok(registry['mayaAppVoiceStatus'],'background voice diagnostic button missing');
+registry['mayaAppVoiceStatus'].onclick();
+assert.ok(registry['mayaAppStatus'].textContent.includes('updated Maya Android APK'));
 console.log('Maya App Launcher fuzzy suggestions: voice-misspelling suggestions are tap-required and never auto-launch.');
 console.log('Voice routes verified: Life Voice and Agent phone commands dispatch through the real launcher with gates intact.');
 console.log('Background launches: deferred to a tap-to-open notification; blocked notifications stay failures.');
