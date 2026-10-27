@@ -1247,6 +1247,9 @@ const NB = {
   openAppInfo() { window.MayaBridge.openAppInfo(); }
 };
 const app = { state:'idle', mode:null, active:false, starting:false, muted:false, transcript:[], userBuf:'', aiBuf:'', modelStarted:false, turnDone:true, skipAudio:false, lastAudioAt:0 };
+// Explicitly requested summaries may read only this current in-memory call transcript.
+// Nothing is silently saved or uploaded; the Intelligence panel separately asks consent.
+window.MayaIntelligenceTranscript=()=>app.transcript.slice(-60).filter(x=>x&&(x.r==='user'||x.r==='maya')&&typeof x.t==='string').map(x=>({r:x.r,t:x.t.slice(0,450)}));
 
 function toast(msg, kind, ms) { const el = document.createElement('div'); el.className = 'toast ' + (kind || ''); el.textContent = msg; $('#toasts').appendChild(el); setTimeout(() => { el.classList.add('out'); setTimeout(() => el.remove(), 320); }, ms || 3400); }
 function showBanner(t) { const b = $('#banner'); b.textContent = t; b.hidden = false; }
