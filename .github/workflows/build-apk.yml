@@ -76,6 +76,7 @@ jobs:
           test -s native-local/MayaLocalTools.java
           test -s maya-features/local-tools.js
           test -s maya-features/visual-life-tools.js
+          test -s maya-features/intelligence-v160.js
           test -s native-visual/MayaVisualScan.java
           test -s scripts/install-visual-tools.py
           test -s scripts/install-local-tools.py
@@ -149,6 +150,7 @@ jobs:
           node tests/media-voice.test.mjs
           node tests/whatsapp-voice-flow.test.mjs
           node tests/visual-tools.test.mjs
+          node tests/intelligence-v160.test.mjs
           node tests/auto-reply.test.mjs
           python3 tests/native-screenshot-check.py
           for js in maya-features/*.js; do node --input-type=module --check < "$js"; done
