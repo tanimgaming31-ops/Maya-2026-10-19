@@ -75,6 +75,9 @@ jobs:
           test -s native-v54/MayaV54Files.java
           test -s native-local/MayaLocalTools.java
           test -s maya-features/local-tools.js
+          test -s maya-features/visual-life-tools.js
+          test -s native-visual/MayaVisualScan.java
+          test -s scripts/install-visual-tools.py
           test -s scripts/install-local-tools.py
           test -s native-v54/MayaV54Macro.java
           test -s maya-features/advanced-loader.js
@@ -145,6 +148,7 @@ jobs:
           node tests/local-tools.test.mjs
           node tests/media-voice.test.mjs
           node tests/whatsapp-voice-flow.test.mjs
+          node tests/visual-tools.test.mjs
           node tests/auto-reply.test.mjs
           python3 tests/native-screenshot-check.py
           for js in maya-features/*.js; do node --input-type=module --check < "$js"; done
@@ -232,6 +236,7 @@ jobs:
           python3 scripts/install-app-launcher.py
           python3 scripts/install-v54.py
           python3 scripts/install-local-tools.py
+          python3 scripts/install-visual-tools.py
           python3 scripts/install-voice-media.py
           python3 scripts/install-auto-reply.py
           grep -Fq 'public String autoReply(String action, String json)' android/app/src/main/java/com/tanim/maya/MayaBridge.java
@@ -244,6 +249,8 @@ jobs:
           grep -Fq 'MayaV54Files.accept(this, requestCode, resultCode, data)' android/app/src/main/java/com/tanim/maya/MainActivity.java
           test -s android/app/src/main/java/com/tanim/maya/MayaV54Macro.java
           test -s android/app/src/main/java/com/tanim/maya/MayaLocalTools.java
+          test -s android/app/src/main/java/com/tanim/maya/MayaVisualScan.java
+          grep -Fq 'public String visualScan(' android/app/src/main/java/com/tanim/maya/MayaBridge.java
           grep -Fq 'MayaLocalTools.run(ctx,act,action,input)' android/app/src/main/java/com/tanim/maya/MayaV54Bridge.java
           grep -Fq 'public String listLaunchableApps()' android/app/src/main/java/com/tanim/maya/MayaBridge.java
           grep -Fq 'public String launchListedApp(' android/app/src/main/java/com/tanim/maya/MayaBridge.java
