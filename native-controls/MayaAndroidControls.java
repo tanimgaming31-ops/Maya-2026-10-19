@@ -179,7 +179,8 @@ public final class MayaAndroidControls {
             response.put("duplicates",duplicates).put("limited",limited);
             response.put("hashBudgetBytes",budget);
         }catch(Exception e){response=result("error","Selected folder became inaccessible. Reopen folder picker.");}
-        try{response.put("requestId",request);}catch(Exception ignored){}\n        synchronized(LOCK){if(request==storageSeq)storageJson=response.toString();}
+        try{response.put("requestId",request);}catch(Exception ignored){}
+        synchronized(LOCK){if(request==storageSeq)storageJson=response.toString();}
     }
     private static String storageScan(Context c){
         Uri t=approved(c);
