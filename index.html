@@ -656,7 +656,20 @@ function validateAction(args, now, enabled) {
   else if (!PHASE1.includes(action)) return fail('Unknown action "' + action.slice(0, 40) + '". Allowed: ' + PHASE1.join(', '));
   const p = {}; let e;
   switch (action) {
-    case 'OPEN_APP': if (!appKey(args.app)) return fail('Unknown app. Known apps: ' + Object.keys(APPS).join(', ')); p.app = appKey(args.app); break;
+    case 'OPEN_APP': {
+      // The old APPS object contains only website/PWA fallbacks, NOT every
+      // app Android can launch. Preserve those links in browsers, while
+      // accepting any safe display name for the native installed-app catalog.
+      const raw = String(args.app || '').normalize('NFKC').replace(/\\s+/g, ' ').trim();
+      const known = appKey(raw);
+      if ((!known && raw.length < 2) || raw.length > 100 ||
+          /(?:https?:\\/\\/|intent:|[\\r\\n])/iu.test(raw) ||
+          (!known && (!/^[\\p{L}\\p{M}\\p{N}][\\p{L}\\p{M}\\p{N} ._()+\\-]*$/u.test(raw) ||
+            /^[a-z0-9_]+(?:\\.[a-z0-9_]+)+$/i.test(raw))))
+        return fail('Enter a valid installed app name (not a URL or package ID).');
+      p.app = known || raw;
+      break;
+    }
     case 'OPEN_SETTINGS': { const s = str(args.setting || 'main', 20).toLowerCase(); if (!SETTINGS_INTENTS[s]) return fail('Unknown setting. Allowed: ' + Object.keys(SETTINGS_INTENTS).join(', ')); p.setting = s; break; }
     case 'START_TIMER': { const s = Number(args.seconds); if (!Number.isInteger(s) || s < 1 || s > 86400) return fail('seconds must be a whole number from 1 to 86400.'); p.seconds = s; p.label = str(args.label, 40); break; }
     case 'CREATE_ALARM': if ((e = checkClock(args, p))) return fail(e); p.label = str(args.label, 40); break;
@@ -786,7 +799,12 @@ function nextOccurrence(h, m, now) { const d = new Date(now); d.setHours(h, m, 0
 const stamp = d => d.getFullYear() + pad(d.getMonth() + 1) + pad(d.getDate()) + 'T' + pad(d.getHours()) + pad(d.getMinutes()) + '00';
 function planAction(action, p, now) {
   switch (action) {
-    case 'OPEN_APP': { const a = appLink(p.app); return { kind:'link', href:a.href, label:'Open ' + a.label, native:{ action:'OPEN_APP', pkg:APPS[a.key].pkg || '', url:APPS[a.key].url } }; }
+    case 'OPEN_APP': {
+      const a = appLink(p.app);
+      if (!a) return { kind:'installed-app', name:p.app };
+      return { kind:'link', href:a.href, label:'Open ' + a.label,
+        native:{ action:'OPEN_APP', pkg:APPS[a.key].pkg || '', url:APPS[a.key].url } };
+    }
     case 'OPEN_SETTINGS': { const s = SETTINGS_INTENTS[p.setting]; return { kind:'link', href:'intent:#Intent;action=' + s.action + ';end', label:'Open ' + s.label + ' settings', bestEffort:true, native:{ action:'OPEN_URL', intentAction:s.action } }; }
     case 'START_TIMER': return { kind:'timer', ms:p.seconds * 1000, label:p.label || fmtDur(p.seconds) + ' timer' };
     case 'CREATE_ALARM': return { kind:'alarm', at:nextOccurrence(p.hour24, p.minute, now), label:p.label || 'Alarm ' + fmt12(p.hour24, p.minute) };
@@ -970,7 +988,7 @@ function toolDeclarations(native) {
     { name:'getFeatureReport', description:'READ-ONLY: generate Maya installed app feature inventory and current Android permission states, in Bengali. Call this first for user questions about all features, what is working, incomplete, unsupported, available permissions, or self-diagnostics. This does NOT exercise actions or prove end-to-end operation.', parameters:{ type:'OBJECT', properties:{ } } },
     { name:'androidAction', description:'Do one safe phone action from a fixed list. Risky ones need confirmed=false first, then confirmed=true with the token.', parameters:{ type:'OBJECT', properties:{
       action:S('The action name.', { enum:native ? PHASE1.concat(NATIVE_ACTIONS) : PHASE1 }),
-      app:S('OPEN_APP / PREPARE_CHAT_CONTACT app name. For cloned WhatsApp use SOCIAL_CHAT_OPEN app=whatsapp_clone or OPEN_CLONE_WHATSAPP. SOCIAL_CHAT_OPEN app=imo|messenger|whatsapp|whatsapp_clone; SOCIAL_INAPP_SEARCH app=tiktok|youtube|facebook; SOCIAL_SEARCH app=youtube|facebook|tiktok|instagram.'),
+      app:S('OPEN_APP: any installed Android launcher-visible app display name, not just the older social app names. No URLs or package IDs. PREPARE_CHAT_CONTACT app remains limited to supported messaging services. For cloned WhatsApp use SOCIAL_CHAT_OPEN app=whatsapp_clone or OPEN_CLONE_WHATSAPP. SOCIAL_INAPP_SEARCH app=tiktok|youtube|facebook; SOCIAL_SEARCH app=youtube|facebook|tiktok|instagram.'),
       setting:S('OPEN_SETTINGS: main, wifi, bluetooth, battery, display, storage, hotspot, accessibility, notifications, dnd. For battery percentage use BATTERY_STATUS instead.'),
       seconds:{ type:'INTEGER', description:'START_TIMER: duration in seconds.' },
       label:S('Optional label for a timer or alarm.'),
@@ -1584,6 +1602,17 @@ async function doAndroidAction(args) {
 async function runPlan(action, p) {
   const plan = planAction(action, p, Date.now());
   switch (plan.kind) {
+    case 'installed-app': {
+      // Calls the same safeguarded, Android-validated launcher used by
+      // Unified Life Voice. Browsers cannot enumerate or launch native apps.
+      if (!hasNative() || typeof window.MayaInstalledApps?.openNamedApp !== 'function')
+        return {status:'unsupported', reason:'Installed app opening requires the updated Maya Android APK and App Launcher module.'};
+      const message=await window.MayaInstalledApps.openNamedApp(plan.name);
+      if(message.startsWith('Android launch requested:'))return {status:'requested',note:message};
+      if(message.startsWith('ব্যাকগ্রাউন্ড লঞ্চ:'))return {status:'pending',note:message};
+      if(message.startsWith('App selection cancelled')||message.startsWith('App selection timed out'))return {status:'cancelled',reason:message};
+      return {status:'unavailable',reason:message};
+    }
     case 'native-contact-draft': {
       if (!hasNative()) return {status:'unsupported',reason:'Opening a saved contact by name needs the Android APK.'};
       const r = await nativeControl('PREPARE_CHAT_CONTACT', {app:plan.app, contact_name:plan.contact_name, message:plan.message});
