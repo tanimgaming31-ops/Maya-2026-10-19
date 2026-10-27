@@ -7,6 +7,10 @@ java=Path('native-app-launcher/MayaAppCatalog.java').read_text(encoding='utf-8')
 bridge=Path('setup-native.sh').read_text(encoding='utf-8')
 query=Path('scripts/ensure-launcher-query.py').read_text(encoding='utf-8')
 assert 'queryIntentActivities' in java and 'Intent.CATEGORY_LAUNCHER' in java
+assert 'LauncherApps' in java and 'getActivityList(null, Process.myUserHandle())' in java
+assert 'public static boolean handleSpoken' in java and 'notifyLaunch' in java
+assert 'MayaAppCatalog.handleSpoken(ctx, words)' in script
+assert 'public String appVoiceDiagnostics()' in script
 assert 'Intent.makeMainActivity' in java and 'startActivity(launch)' in java
 assert 'packageName.equals(app.optString("packageName"))' in java
 assert 'activityName.equals(app.optString("activityName"))' in java
