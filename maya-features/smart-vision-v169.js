@@ -14,10 +14,10 @@ export function parseVisionVoice(text){
  if(/^(?:save (?:the |my )?receipt|save receipt expense|বিলের খরচ সেভ করো|রসিদের খরচ সেভ করো)$/iu.test(t))return {kind:'receiptSave'};
  if(/^(?:read (?:my |the )?medicine label|medicine label assistant|ওষুধের লেখা পড়ো|ওষুধের লেবেল পড়ো)$/iu.test(t))return {kind:'medicine'};
  if(/^(?:explain (?:the |my )?medicine label|explain label|ওষুধের লেবেল বুঝিয়ে বলো)$/iu.test(t))return {kind:'medicineExplain'};
+ if(/^(?:count objects|object counter|জিনিস গুনে দাও|ছবির জিনিস গুনো)$/iu.test(t))return {kind:'count',target:''};
  const count=t.match(/^(?:count|how many)\s+(.{2,65}?)(?:\s+(?:in (?:my |this )?photo|are (?:there|visible)))?$/iu)
    ||t.match(/^(.{2,65}?)\s+কয়টি আছে(?: ছবিতে)?$/u);
  if(count)return {kind:'count',target:compact(count[1],65)};
- if(/^(?:count objects|object counter|জিনিস গুনে দাও|ছবির জিনিস গুনো)$/iu.test(t))return {kind:'count',target:''};
  if(/^(?:organize (?:my |the )?photos|sort my pictures|ai photo organizer|ছবিগুলো সাজাও|ফটো অর্গানাইজ করো)$/iu.test(t))return {kind:'organize'};
  if(/^(?:read handwriting|convert handwriting to text|read handwritten note|হাতের লেখা পড়ো|হাতের লেখা টাইপ করো)$/iu.test(t))return {kind:'handwriting'};
  if(/^(?:read (?:the |last )?(?:scanned )?text aloud|লেখা পড়ে শোনাও|পড়ে শোনাও)$/iu.test(t))return {kind:'readText'};
@@ -138,6 +138,7 @@ async function readSelected(){
   if(el('mayaSmartVisionReceiptItems'))el('mayaSmartVisionReceiptItems').value=lastReceipt.items.map(x=>x.name+' | '+x.price.toFixed(2)).join('\n');
   if(el('mayaSmartVisionAmount'))el('mayaSmartVisionAmount').value=lastReceipt.total??'';
   if(el('mayaSmartVisionCurrency'))el('mayaSmartVisionCurrency').value=lastReceipt.currency||'AED';
+  speakVision('Receipt scanned. I found '+lastReceipt.items.length+' possible items. Please verify the total before saving.');
   return status('Receipt scanned: '+lastReceipt.items.length+' candidate items; detected total '+(lastReceipt.total??'NOT FOUND')+' '+(lastReceipt.currency||'currency unknown')+'. Verify the editable items and total before saving. OCR is not proof.');
  }
  if(mode==='medicine'){
@@ -156,7 +157,7 @@ function receiptSave(){
  const items=compact(el('mayaSmartVisionReceiptItems')?.value,1800);
  if(!Number.isFinite(amount)||amount<=0)return status('Enter the verified receipt total first.');
  if(!confirm('Save the reviewed receipt total '+amount+' '+currency+' in Maya Life Suite expenses? The original photo will not be saved.'))return status('Receipt save cancelled.');
- try{saveReceiptExpense(amount,currency,compact('Receipt: '+items.replaceAll('\n','; '),90)||'Reviewed receipt');return status('Expense saved in existing Maya Life Suite: '+amount+' '+currency+'.');}
+ try{saveReceiptExpense(amount,currency,compact('Receipt: '+items.replaceAll('\n','; '),90)||'Reviewed receipt');speakVision('Saved the approved receipt total.');return status('Expense saved in existing Maya Life Suite: '+amount+' '+currency+'.');}
  catch(e){return status('Could not save expense: '+compact(e.message,150));}
 }
 async function pdfSave(){
@@ -168,6 +169,7 @@ async function pdfSave(){
   const data=await imageData(chosen,1600);
   const r=JSON.parse(window.MayaBridge.documentPdf('CREATE_PDF',JSON.stringify({image:data,corners})));
   if(r.status!=='ok')return status(r.message||r.status);
+  speakVision('Your PDF has been saved to the Downloads Maya folder.');
   return status('PDF saved by Android to Downloads/Maya: '+r.name+'. You can open it using Files. It is one page; corners are adjusted manually.');
  }catch(e){return status('PDF not created: '+compact(e.message,200));}
 }
@@ -247,9 +249,11 @@ function mount(){
  const choice=document.createElement('select');choice.id='mayaSmartVisionMode';
  for(const m of modes){const a=document.createElement('option');a.value=m;a.textContent={document:'Document → PDF',receipt:'Receipt → Items & Total',medicine:'Medicine Label',count:'Object Counter',organize:'Photo Organizer',handwriting:'Handwriting → Text'}[m];choice.append(a);}
  choice.onchange=()=>setMode(choice.value);panel.append(choice);
- const file=document.createElement('input');file.id='mayaSmartVisionFile';file.type='file';file.accept='image/*';file.capture='environment';
- file.onchange=()=>{setImage(file.files?.[0]||null);if(chosen&&['receipt','medicine','handwriting'].includes(mode))void readSelected().catch(e=>status(e.message));else status('Image selected. For PDF tap 4 paper corners, then Make PDF. For object counting enter an object name.');};
- panel.append(file);
+ const file=document.createElement('input');file.id='mayaSmartVisionFile';file.type='file';file.accept='image/*';
+ const camera=document.createElement('input');camera.id='mayaSmartVisionCamera';camera.type='file';camera.accept='image/*';camera.capture='environment';
+ const picked=selected=>{if(!selected)return;setImage(selected);if(['receipt','medicine','handwriting'].includes(mode))void readSelected().catch(e=>status(e.message));else status('Image selected. For PDF tap 4 paper corners, then Make PDF. For object counting enter an object name.');};
+ file.onchange=()=>picked(file.files?.[0]);camera.onchange=()=>picked(camera.files?.[0]);
+ panel.append(btn('Choose from Gallery',()=>file.click()),file,btn('Take photo with Camera',()=>camera.click()),camera);
  const preview=document.createElement('canvas');preview.id='mayaSmartVisionPreview';preview.style.cssText='max-width:100%;border:1px solid #426;padding:2px;touch-action:manipulation';preview.onclick=selectCorner;panel.append(preview);
  const corner=document.createElement('p');corner.id='mayaSmartVisionCorner';corner.textContent='Tap paper corners in order: top-left, top-right, bottom-right, bottom-left.';panel.append(corner);
  panel.append(btn('Reset corners',()=>{corners=[0,0,1,0,1,1,0,1];cornerIndex=0;drawPreview();}),
