@@ -3,9 +3,9 @@
 const norm=v=>String(v??'').normalize('NFKC').replace(/[।!?]+$/gu,'').replace(/\s+/gu,' ').trim();
 const unwake=v=>norm(v).replace(/^(?:(?:hey\s+)?maya|মায়া|মায়া|মাইয়া|মাইয়া)\s*[,،:]?\s*/iu,'').trim();
 export const isStart=v=>{
- const t=unwake(v);
- if(t.length===norm(v).length)return false;
- return /^(?:(?:open|start|compose|message)\s+(?:my\s+|the\s+)?whatsapp(?:\s+(?:chat|message))?|(?:আমার\s+)?(?:whatsapp|হোয়াটসঅ্যাপ|হোয়াটসঅ্যাপ|হোয়াটস্যাপ)\s+(?:খোলো|ওপেন করো|মেসেজ করো|মেসেজ পাঠাও|মেসেজ লিখো|খুলে দাও))$/iu.test(t);
+ const t=unwake(v).replace(/^(?:তুমি\s+)?(?:আমার\s+)?/u,'');
+ if(unwake(v).length===norm(v).length)return false;
+ return /^(?:(?:open|start|compose|message)\s+(?:my\s+|the\s+)?whatsapp(?:\s+(?:chat|message))?|(?:আমার\s+)?(?:whatsapp|হোয়াটসঅ্যাপ|হোয়াটসঅ্যাপ|হোয়াটস্যাপ)\s+(?:খোলো|খুলো|ওপেন করো|মেসেজ করো|মেসেজ পাঠাও|মেসেজ লিখো|খুলে দাও))$/iu.test(t);
 };
 const stop=v=>/^(?:cancel|stop|বাতিল|থামো|মেসেজ বাতিল করো|মেসেজ বন্ধ করো)$/iu.test(unwake(v));
 const confirm=v=>/^(?:yes send|yes send it|send it|confirm send|হ্যাঁ পাঠাও|হ্যা পাঠাও|হ্যাঁ মেসেজ পাঠাও|পাঠিয়ে দাও|পাঠিয়ে দাও|সেন্ড করো|হ্যাঁ সেন্ড করো)$/iu.test(unwake(v));
