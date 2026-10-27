@@ -32,6 +32,13 @@ methods = {
     }
 
 """,
+    "public String appVoiceDiagnostics()": """    /** No microphone recordings: just the last explicit background app-opening outcome. */
+    @JavascriptInterface
+    public String appVoiceDiagnostics() {
+        return MayaAppCatalog.voiceDiagnostics(ctx);
+    }
+
+""",
     "public String requestLaunchNotifications()": """    /** Settings control: request notification permission while Maya is visible. */
     @JavascriptInterface
     public String requestLaunchNotifications() {
@@ -52,6 +59,18 @@ if changed:
 
 shutil.copyfile("native-app-launcher/MayaAppCatalog.java", catalog)
 shutil.copyfile("native-app-launcher/MayaBackgroundLaunch.java", java / "MayaBackgroundLaunch.java")
+
+# The V4 native background microphone only handles explicit "Maya open APP"
+# commands. It may show a user-tappable Android notification but may NEVER
+# bypass Android's background launch protection.
+voice = java / "MayaV4Controls.java"
+v = voice.read_text(encoding="utf-8")
+voice_anchor = "        String words = all.substring(wake.length()).trim();"
+voice_route = "        if (MayaAppCatalog.handleSpoken(ctx, words)) return;"
+if voice_route not in v:
+    if v.count(voice_anchor) != 1:
+        raise SystemExit("Native V4 command dispatch changed; refusing background launcher patch")
+    voice.write_text(v.replace(voice_anchor, voice_anchor+"\n"+voice_route, 1), encoding="utf-8")
 
 # Register the foreground watcher from MainActivity.onCreate, before onStart/
 # onResume can run, so a late registration never misreads the foreground state.
