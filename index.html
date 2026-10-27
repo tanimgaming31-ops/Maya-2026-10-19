@@ -660,12 +660,12 @@ function validateAction(args, now, enabled) {
       // The old APPS object contains only website/PWA fallbacks, NOT every
       // app Android can launch. Preserve those links in browsers, while
       // accepting any safe display name for the native installed-app catalog.
-      const raw = String(args.app || '').normalize('NFKC').replace(/\\s+/g, ' ').trim();
+      const raw = String(args.app || '').normalize('NFKC').replace(/\s+/g, ' ').trim();
       const known = appKey(raw);
       if ((!known && raw.length < 2) || raw.length > 100 ||
-          /(?:https?:\\/\\/|intent:|[\\r\\n])/iu.test(raw) ||
-          (!known && (!/^[\\p{L}\\p{M}\\p{N}][\\p{L}\\p{M}\\p{N} ._()+\\-]*$/u.test(raw) ||
-            /^[a-z0-9_]+(?:\\.[a-z0-9_]+)+$/i.test(raw))))
+          /(?:https?:\/\/|intent:|[\r\n])/iu.test(raw) ||
+          (!known && (!/^[\p{L}\p{M}\p{N}][\p{L}\p{M}\p{N} ._()+-]*$/u.test(raw) ||
+            /^[a-z0-9_]+(?:\.[a-z0-9_]+)+$/i.test(raw))))
         return fail('Enter a valid installed app name (not a URL or package ID).');
       p.app = known || raw;
       break;
