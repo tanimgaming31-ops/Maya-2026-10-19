@@ -168,6 +168,16 @@ await run();
 
 /* 6. regression: existing action validation still works */
 t('validateAction OPEN_APP still ok', api.validateAction({ action: 'OPEN_APP', app: 'whatsapp' }, Date.now(), new Set()).ok === true);
+
+for(const name of ['Binance','CapCut','Moto Camera','My Fitness App','ক্যালকুলেটর','Photos Editor']){
+ const r=api.validateAction({action:'OPEN_APP',app:name},Date.now(),new Set());
+ t('OPEN_APP accepts native installed app label: '+name,r.ok===true&&r.p.app===name);
+}
+for(const bad of ['','A','https://bad.example/','com.example.app','intent://app','bad\napp', 'X'.repeat(101)]){
+ const r=api.validateAction({action:'OPEN_APP',app:bad},Date.now(),new Set());
+ t('OPEN_APP rejects unsafe/unusable name: '+JSON.stringify(bad),r.ok===false);
+}
+
 t('validateAction rejects unknown action', api.validateAction({ action: 'FLY_TO_MOON' }, Date.now(), new Set()).ok === false);
 t('validateAction timer bounds still enforced', api.validateAction({ action: 'START_TIMER', seconds: 99999999 }, Date.now(), new Set()).ok === false);
 
