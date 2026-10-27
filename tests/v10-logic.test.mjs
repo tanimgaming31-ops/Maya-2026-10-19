@@ -12,6 +12,29 @@ let pass = 0, fail = 0;
 const t = (name, cond) => { if (cond) { pass++; } else { fail++; console.error('FAIL:', name); } };
 const eq = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 
+/* Maya camera voice & full-screen preview regression checks. */
+const camCode = new Function(logic + '\nreturn {parseMayaCameraCommand,planAction};')();
+for (const [phrase,expected] of [
+  ['মায়া তোমার ক্যামেরা ওপেন করো','open'],
+  ['মায়া ক্যামেরা খোলো','open'],
+  ['মায়া ক্যামেরা চালু করো','open'],
+  ['Maya, open your camera','open'],
+  ['মায়া ক্যামেরা বন্ধ করো','close'],
+  ['Maya close your camera','close'],
+  ['Maya flip camera','flip']
+])t('camera voice route: '+phrase,camCode.parseMayaCameraCommand(phrase)===expected);
+for(const phrase of ['What is in the camera?','মায়া ফেসবুক খোলো','Maya take a screenshot'])
+  t('non-camera voice preserved: '+phrase,camCode.parseMayaCameraCommand(phrase)===null);
+t('Gemini OPEN_CAMERA routes to in-app camera',camCode.planAction('OPEN_CAMERA',{},Date.now()).kind==='maya-camera');
+t('full-screen overlay CSS',html.includes('#cam{position:fixed;inset:0;width:100vw;height:100vh;height:100dvh'));
+t('camera video uses cover',html.includes('#cam video{display:block;width:100%;height:100%;object-fit:cover}'));
+t('dedicated camera close UI',html.includes('id="camClose"') && html.includes("$('#camClose').onclick = () => Cam.disable()"));
+t('camera open dispatch before Life Voice',html.includes('if(consumeMayaCameraVoice(t)){showYou(t);return;}'));
+t('Live transcription camera intercept',html.includes('if(consumeMayaCameraVoice(t)){app.transcript.push'));
+t('fallback speech camera intercept',html.includes('const cameraAction=parseMayaCameraCommand(text);'));
+t('camera closed on call end',html.includes('if (Cam.on) Cam.disable();'));
+
+
 /* Explicit user choice: Maya must not speak Spanish, including translator/practice
  * requests. Live model audio is prompt-directed; fallback TTS additionally guarded. */
 const languageApi = new Function(logic + '\nreturn {buildSystemPrompt,isSpanishSpeech,avoidSpanishSpeech};')();
