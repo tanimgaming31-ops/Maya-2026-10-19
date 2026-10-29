@@ -27,6 +27,7 @@ on:
       - 'native-vision/**'
       - 'native-home/**'
       - 'native-owner/**'
+      - 'native-maya-merge/**'
       - 'native-voice-media/**'
       - 'native-auto-reply/**'
       - 'scripts/**'
@@ -104,6 +105,9 @@ jobs:
           test -s scripts/install-local-tools.py
           test -s native-v54/MayaV54Macro.java
           test -s maya-features/advanced-loader.js
+          test -s maya-features/native-handsfree-v177.js
+          test -s native-maya-merge/MayaV52Overlay.java
+          test -s scripts/install-maya-floating.py
           test -s maya-features/life-suite.js
           test -s maya-features/life-voice.js
           test -s maya-features/smart-hub.js
@@ -180,6 +184,8 @@ jobs:
           node tests/voice-first-v172.test.mjs
           python3 tests/home-voice-native-check.py
           node tests/owner-guard-v174.test.mjs
+          node tests/native-handsfree-v177.test.mjs
+          python3 tests/maya-native-floating-check.py
           python3 tests/owner-guard-native-check.py
           node tests/auto-reply.test.mjs
           python3 tests/native-screenshot-check.py
@@ -278,6 +284,8 @@ jobs:
           python3 scripts/install-smart-vision.py
           python3 scripts/install-home-voice.py
           python3 scripts/install-owner-guard.py
+          python3 scripts/install-maya-floating.py
+          grep -Fq 'window.updateViewLayout(root,params)' android/app/src/main/java/com/tanim/maya/MayaV52Overlay.java
           grep -Fq 'public String autoReply(String action, String json)' android/app/src/main/java/com/tanim/maya/MayaBridge.java
           grep -Fq 'MayaAutoReply.onMessage(this,sbn,m)' android/app/src/main/java/com/tanim/maya/MayaNotificationService.java
           test -s android/app/src/main/java/com/tanim/maya/MayaAutoReply.java
