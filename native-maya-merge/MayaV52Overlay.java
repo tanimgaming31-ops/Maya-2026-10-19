@@ -112,7 +112,8 @@ public final class MayaV52Overlay {
             screenshot.setOnClickListener(v->{
                 // Existing Android Accessibility screenshot consent gate remains.
                 MayaV52Capture.start(ctx);
-                openMaya(ctx);
+                new android.os.Handler(android.os.Looper.getMainLooper())
+                    .postDelayed(()->openMaya(ctx),1500);
             });
             close.setOnClickListener(v->hide());
             window.addView(root,params);
