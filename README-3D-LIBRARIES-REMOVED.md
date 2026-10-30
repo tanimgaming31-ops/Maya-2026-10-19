@@ -17,4 +17,4 @@ To restore the 3D experience, compare this version with the backup branch, resto
 
 ## Current rights statement
 
-New original Maya material that TaNiM world has the legal right to license is covered by the repository's current **TaNiM world Proprietary License — All Rights Reserved**. Earlier MIT-licensed copies retain previously granted permissions. Existing Android/Capacitor and other external dependencies remain under their own terms. This statement alone cannot certify exclusive rights to the `maya.vrm` avatar or images.
+New original Maya material that TaNiM world has the legal right to license is covered by the repository's current **TaNiM world License — All Rights Reserved**. Earlier MIT-licensed copies retain previously granted permissions. Existing Android/Capacitor and other external dependencies remain under their own terms. This statement alone cannot certify exclusive rights to the `maya.vrm` avatar or images.
