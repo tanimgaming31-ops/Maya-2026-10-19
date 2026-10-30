@@ -1,15 +1,15 @@
-# MAYA AI Voice Assistant
+# MAYA AI Voice Assistant — Owner & Rights Statement
 
-**Project name:** MAYA AI Voice Assistant
+**Project identity:** TaNiM world
 
-**Project owner and original-app identity:** TaNiM world
+**Repository administrator:** `tanimgaming31-ops`
 
-**GitHub repository:** https://github.com/tanimgaming31-ops/Maya-2026-10-19
+**License for original material released under the new terms:** [TaNiM world Proprietary License](LICENSE) — All Rights Reserved.
 
-**GitHub account:** tanimgaming31-ops
+TaNiM world reserves rights in its own original source code, interface, and other material that it lawfully owns or may license. This does not turn code created by other parties into the project's exclusive property.
 
-**License for original Maya material:** The root `LICENSE` file identifies TaNiM world under the MIT License for code and materials that TaNiM world has the right to license.
+The former public MIT-licensed versions remain subject to their original grants. Third-party dependencies (including Android, Capacitor, and build tooling), and rights in `maya.vrm` and images, remain separate and must be checked. A GitHub repository or ownership statement alone is not proof of owning all its contents.
 
-This statement identifies the Maya project and its original work. It does not transfer ownership of software components or media created by someone else. Externally licensed components remain subject to their applicable terms. Optional bundled 3D vendor libraries were removed from this working version; Android and build dependencies remain separately licensed.
+The original SVG 2D Maya is currently used because the previous Three.js and pixiv 3D vendor code was removed from the active branch. The old 3D source is preserved in `backup/maya-before-3d-vendor-removal-2026-10-31`.
 
-The existing Maya application source, Android features, 3D components and Memory Pack handling are not changed by this project identity statement.
+Changing this license statement makes no changes to APK runtime code, existing Memory Packs, Gemini API key handling, or Android phone control features.

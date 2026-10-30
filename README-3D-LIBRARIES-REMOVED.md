@@ -14,3 +14,7 @@ On 2026-10-31, the project removed its bundled Three.js and pixiv three-vrm runt
 - Prior Git commits and the backup branch retain the original vendor code and its licenses. Do not redistribute those revisions without complying with their original notices.
 
 To restore the 3D experience, compare this version with the backup branch, restore the necessary renderer and vendor files with correct legal notices, and run tests before deploying.
+
+## Current rights statement
+
+New original Maya material that TaNiM world has the legal right to license is covered by the repository's current **TaNiM world Proprietary License — All Rights Reserved**. Earlier MIT-licensed copies retain previously granted permissions. Existing Android/Capacitor and other external dependencies remain under their own terms. This statement alone cannot certify exclusive rights to the `maya.vrm` avatar or images.

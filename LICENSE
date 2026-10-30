@@ -1,26 +1,48 @@
-MIT License
+MAYA AI Voice Assistant
+TaNiM world — Proprietary License
+All Rights Reserved
 
-Copyright (c) 2026 TaNiM world
+Effective from: 31 October 2026
+Project: MAYA AI Voice Assistant
+Rights holder for the original project material: TaNiM world
+Repository: https://github.com/tanimgaming31-ops/Maya-2026-10-19
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+1. COVERED MATERIAL
+This notice applies only to original software code, documentation, artwork,
+and other project content for which TaNiM world owns the relevant rights or
+has obtained the legal right to apply these terms.
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+2. RIGHTS RESERVED
+Except where applicable law expressly permits otherwise, no license to
+reproduce, modify, redistribute, sublicense, resell, or create derivative
+works from the covered original material is granted without prior written
+permission from the rights holder. People may install and run official
+application releases as permitted by the publisher and applicable law.
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+3. THIRD-PARTY MATERIAL AND SERVICES
+This notice does not change the ownership, licensing, or permitted use of
+third-party code, Android and Capacitor components, build tools, APIs,
+platforms, frameworks, photographs, artwork, or 3D models. All such material
+is subject to its own terms. In particular, copyright and redistribution
+rights for the included maya.vrm model and several image assets have not
+been independently confirmed.
 
-This project also includes third-party components and assets. This license
-applies only to material for which TaNiM world owns the copyright or has the
-right to license. It does not replace third-party copyrights, licenses, or
-asset-use terms. Other Android and build dependencies, if present, retain their own licenses.
+4. EARLIER MIT-LICENSED VERSIONS
+Earlier versions of original project material were publicly released under
+an MIT License. This new notice is prospective. It does not withdraw rights
+already granted to recipients of copies released under that earlier license
+and does not alter earlier copies or previously granted third-party rights.
+
+5. CONTRIBUTORS AND OWNERSHIP
+This notice is a declaration by the project publisher, not independent
+legal verification of the authorship or ownership of every file. Any
+contributor's rights, lawful third-party ownership, and applicable licenses
+remain in effect. New material contributed by others requires appropriate
+permission or rights transfer before being covered by these terms.
+
+6. WARRANTY
+The covered material is provided without a warranty to the maximum extent
+permitted by applicable law.
+
+TaNiM world
+MAYA AI Voice Assistant
