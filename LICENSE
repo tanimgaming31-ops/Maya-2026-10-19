@@ -19,6 +19,26 @@ works from the covered original material is granted without prior written
 permission from the rights holder. People may install and run official
 application releases as permitted by the publisher and applicable law.
 
+2A. EXPLICIT RESTRICTIONS ON COVERED ORIGINAL WORK
+Unless TaNiM world provides prior written permission, and except where
+applicable law or an earlier valid license expressly permits an activity,
+a person or organization must not:
+(a) Copy, reproduce, upload, or distribute the protected original source
+    code, or substantial protected parts of it.
+(b) Sell, resell, sublicense, distribute, or commercially publish copies
+    of the covered original source code or unauthorized derivatives.
+(c) Modify, adapt, translate, reverse engineer where legally restrictable,
+    or publish modified versions of the covered original work.
+(d) Publish the covered original work or its unauthorized modified
+    versions under another person's or company's name, falsely claim
+    authorship or ownership, or misrepresent TaNiM world's work as
+    someone else's original creation.
+
+These restrictions do not override lawful exceptions, independently
+created work, third-party licenses, or permissions already granted
+under the earlier MIT-licensed releases. They do not make third-party
+components the property of TaNiM world.
+
 3. THIRD-PARTY MATERIAL AND SERVICES
 This notice does not change the ownership, licensing, or permitted use of
 third-party code, Android and Capacitor components, build tools, APIs,
