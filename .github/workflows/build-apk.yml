@@ -189,6 +189,7 @@ jobs:
           python3 tests/owner-guard-native-check.py
           node tests/auto-reply.test.mjs
           python3 tests/native-screenshot-check.py
+          node tests/v25-54-hub.test.mjs
           for js in maya-features/*.js; do node --input-type=module --check < "$js"; done
           grep -Fq "import './agent-suite.js'" maya-features/advanced-loader.js
           mkdir -p www
@@ -210,7 +211,7 @@ jobs:
           html.write_text(s, encoding='utf-8')
           sw = Path('www/sw.js')
           w = sw.read_text(encoding='utf-8')
-          w = re.sub(r"const V = '[^']+';", "const V = 'maya-notification-auto-reply-20261025';", w, count=1)
+          w = re.sub(r"const V = '[^']+';", "const V = 'maya-v25-feature-catalog-20261031';", w, count=1)
           if "'./maya-v18-runtime.js'" not in w:
               if 'const SHELL = [' not in w: raise SystemExit('Unexpected sw.js shell declaration')
               w = w.replace('const SHELL = [', "const SHELL = ['./maya-v18-runtime.js', './maya-features/feature-registry.js', './maya-features/android-bridge.js', './maya-features/memory-v2.js', './maya-features/productivity.js', './maya-features/daily-briefing.js', './maya-features/advanced-loader.js', './maya-features/agent-suite.js', './maya-features/agent-voice.js', './maya-features/agent-voice-bridge.js', './maya-features/offline-commands.js', './maya-features/advanced-panel.html', './maya-features/private-vault.js', './maya-features/screenshot.js', './maya-features/voice-screenshot.js', './maya-features/life-suite.js', './maya-features/life-voice.js', './maya-features/smart-hub.js', './maya-features/app-launcher.js', ",1)
@@ -236,6 +237,8 @@ jobs:
           test -s www/maya-features/auto-reply.js
           test -s www/maya-features/voice-media.js
           test -s www/maya-features/voice-media-bridge.js
+          test -s www/maya-features/v25-54-registry.js
+          test -s www/maya-features/v25-54-hub.js
           test -s www/maya-features/v54-suite.js
           test -s www/maya-features/local-tools.js
           test -s www/maya-features/smart-vision-v169.js
@@ -361,4 +364,4 @@ jobs:
           cp android/app/build/outputs/apk/debug/app-debug.apk Maya.apk
           gh release create "v${{ github.run_number }}" Maya.apk \
             --title "Maya v${{ github.run_number }}" \
-            --notes "Maya Auto Reply: opt-in exact-contact allowlist and user-authored WhatsApp/IMO notification Quick Reply; default OFF, cooldown/daily limits, group/security exclusion and delivery unverified. Keeps Voice Media upgrade: explicit voice screenshot from Android Accessibility saved to Gallery Pictures/Maya, no hidden capture; bounded YouTube search and title-match auto-tap (playback must be device verified). Keeps Maya Birthday update: Created 19 October 2026 (exact clock time unknown until user saves it); birthday voice replies, calendar age, annual in-app 2D/3D avatar glow celebration and birthday in original Memory/V5 backups. Preserves V54 native suite: Voice-driven native six-feature upgrade with opt-in one-step Accessibility app macro, Android Notification Quick Reply, scoped SAF folder manager, OS background reminders, saved routines and command routing. Reuses Maya's existing eight-feature Agent Suite in Settings (planning, browser links, Android app launcher, file analysis, grounded research, read-only multi-step tasks, coding review, local dashboard). Requires the user's own Gemini key/quota. Previous 3D, voice, memory and native features preserved. Android device test still needed."
+            --notes "Maya Auto Reply: opt-in exact-contact allowlist and user-authored WhatsApp/IMO notification Quick Reply; default OFF, cooldown/daily limits, group/security exclusion and delivery unverified. Keeps Voice Media upgrade: explicit voice screenshot from Android Accessibility saved to Gallery Pictures/Maya, no hidden capture; bounded YouTube search and title-match auto-tap (playback must be device verified). Keeps Maya Birthday update: Created 19 October 2026 (exact clock time unknown until user saves it); birthday voice replies, calendar age, annual in-app 2D/3D avatar glow celebration and birthday in original Memory/V5 backups. Preserves V54 native suite: Voice-driven native six-feature upgrade with opt-in one-step Accessibility app macro, Android Notification Quick Reply, scoped SAF folder manager, OS background reminders, saved routines and command routing. Reuses Maya's existing eight-feature Agent Suite in Settings (planning, browser links, Android app launcher, file analysis, grounded research, read-only multi-step tasks, coding review, local dashboard). Requires the user's own Gemini key/quota. V25 full PDF catalog: 54 groups and 444 subfeatures now searchable in app Settings; catalog does NOT imply device implementation. 2D avatar, voice, memory and native code preserved; old third-party 3D rendering disabled. Android device test still needed."

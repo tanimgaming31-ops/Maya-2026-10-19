@@ -33,6 +33,8 @@ import './voice-first-v172.js';
 import './owner-guard-v174.js';
 // Native Maya-only floating companion and hands-free shortcuts (Jerry-style capability, not Jerry app).
 import './native-handsfree-v177.js';
+// PDF V25: full 54-feature / 444-subfeature searchable catalog; no native privilege changes.
+import './v25-54-hub.js';
 function init(){
   const host=document.querySelector('#setSheet .body');
   if(!host||document.getElementById('mayaAdvancedLink'))return;
