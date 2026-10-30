@@ -1,0 +1,44 @@
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+import {FEATURES54,SECTION_NAMES,parseMayaFeatureRequest,searchMayaFeatures} from '../maya-features/v25-54-registry.js';
+
+assert.equal(FEATURES54.length,54);
+assert.equal(SECTION_NAMES.length,5);
+assert.deepEqual(SECTION_NAMES.map((_,i)=>FEATURES54.filter(f=>f.section===i+1).length),[12,8,15,8,11]);
+assert.equal(FEATURES54.reduce((sum,f)=>sum+f.subfeatures.length,0),444);
+for(let i=0;i<FEATURES54.length;i++){
+ const f=FEATURES54[i];
+ assert.equal(f.id,i+1,'sequential PDF group IDs');
+ assert.ok(f.title.length>3);
+ assert.ok(f.subfeatures.length>=4,'PDF subfeatures must be present');
+ assert.equal(f.verification,'device-test-required');
+ assert.ok(f.note&&f.note.length>20);
+ assert.equal(new Set(f.subfeatures).size,f.subfeatures.length,'no duplicate PDF subfeatures');
+}
+assert.ok(FEATURES54[0].title.includes('Gemini Live'));
+assert.ok(FEATURES54[53].title.includes('Session Management'));
+assert.ok(searchMayaFeatures('WhatsApp').some(f=>f.id===24));
+assert.ok(searchMayaFeatures('Memory').some(f=>f.id===15));
+assert.deepEqual(searchMayaFeatures('54').map(f=>f.id),[54]);
+assert.deepEqual(searchMayaFeatures('this-should-not-exist'),[]);
+assert.deepEqual(searchMayaFeatures('').length,54);
+assert.equal(parseMayaFeatureRequest('Maya show all 54 features')?.kind,'open');
+assert.equal(parseMayaFeatureRequest('Hey Maya show features')?.kind,'open');
+assert.equal(parseMayaFeatureRequest('মায়া সব ফিচার দেখাও')?.kind,'open');
+assert.equal(parseMayaFeatureRequest('মায়া ফিচার তালিকা')?.kind,'open');
+assert.deepEqual(parseMayaFeatureRequest('Maya find feature WhatsApp'),{kind:'search',query:'whatsapp'});
+assert.deepEqual(parseMayaFeatureRequest('মায়া ফিচার 54'),{kind:'search',query:'54'});
+assert.equal(parseMayaFeatureRequest('Maya send WhatsApp'),null);
+assert.equal(parseMayaFeatureRequest('Maya delete messages'),null);
+assert.equal(parseMayaFeatureRequest('Maya secret photo'),null);
+const loader=readFileSync(new URL('../maya-features/advanced-loader.js',import.meta.url),'utf8');
+assert.ok(loader.includes("import './v25-54-hub.js'"));
+const hub=readFileSync(new URL('../maya-features/v25-54-hub.js',import.meta.url),'utf8');
+assert.ok(hub.includes('mayaV25FeaturesPanel'));
+assert.ok(hub.includes("$('v6Diagnose')?.click()"));
+assert.ok(!hub.includes('localStorage.setItem('),'catalog must not change user data');
+const workflow=readFileSync(new URL('../.github/workflows/build-apk.yml',import.meta.url),'utf8');
+assert.ok(workflow.includes('node tests/v25-54-hub.test.mjs'));
+assert.ok(workflow.includes('test -s www/maya-features/v25-54-registry.js'));
+assert.ok(workflow.includes('test -s www/maya-features/v25-54-hub.js'));
+console.log('Maya V25 PDF 54-feature hub: 54 groups, 444 subfeatures, five sections, safe voice lookup and APK wiring passed.');
