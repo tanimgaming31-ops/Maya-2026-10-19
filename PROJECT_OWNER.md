@@ -4,7 +4,7 @@
 
 **Repository administrator:** `tanimgaming31-ops`
 
-**License for original material released under the new terms:** [TaNiM world Proprietary License](LICENSE) — All Rights Reserved.
+**License for original material released under the new terms:** [TaNiM world License](LICENSE) — All Rights Reserved.
 
 TaNiM world reserves rights in its own original source code, interface, and other material that it lawfully owns or may license. This does not turn code created by other parties into the project's exclusive property.
 
