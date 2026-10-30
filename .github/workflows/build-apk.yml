@@ -193,7 +193,7 @@ jobs:
           grep -Fq "import './agent-suite.js'" maya-features/advanced-loader.js
           mkdir -p www
           cp index.html manifest.webmanifest sw.js icon-192.png icon-512.png www/
-          cp -r vendor www/
+          if [ -d vendor ]; then cp -r vendor www/; fi
           if [ -f maya.vrm ]; then cp maya.vrm www/; fi
           # Integrate existing new modules into the ACTUAL APK assets.
           cp -r maya-features www/
