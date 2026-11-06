@@ -1,0 +1,149 @@
+name: Corrected Maya Debug APK
+
+on:
+  push:
+    branches: [fix/app-name-newline-validation]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: maya-feature-debug-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: true
+
+env:
+  MAYA_BUILD_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
+
+jobs:
+  non-browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.MAYA_BUILD_COMMIT }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Run every non-browser test
+        run: python3 scripts/ci-run-tests.py --output "$RUNNER_TEMP/maya-non-browser"
+      - name: Retain complete non-browser results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Maya-non-browser-${{ env.MAYA_BUILD_COMMIT }}
+          path: ${{ runner.temp }}/maya-non-browser
+          if-no-files-found: error
+          retention-days: 14
+
+  browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.MAYA_BUILD_COMMIT }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install isolated browser test tooling
+        run: |
+          set -euo pipefail
+          npm install --prefix "$RUNNER_TEMP/browser-tools" --no-save --ignore-scripts playwright@1.62.1
+          "$RUNNER_TEMP/browser-tools/node_modules/.bin/playwright" install --with-deps chromium
+      - name: Run unchanged browser smoke test
+        env:
+          MAYA_PLAYWRIGHT_TOOLS: ${{ runner.temp }}/browser-tools
+        run: python3 scripts/ci-run-browser.py --output "$RUNNER_TEMP/maya-browser"
+      - name: Retain browser failures separately
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Maya-browser-${{ env.MAYA_BUILD_COMMIT }}
+          path: ${{ runner.temp }}/maya-browser
+          if-no-files-found: error
+          retention-days: 14
+
+  debug-apk:
+    needs: non-browser
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.MAYA_BUILD_COMMIT }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Install CI preparation dependencies
+        run: |
+          set -euo pipefail
+          python3 -m pip install Pillow PyYAML
+          npm install --ignore-scripts --no-audit --no-fund --no-save @capacitor/android@6.2.3 @capacitor/cli@6.2.3 @capacitor/core@6.2.3
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'platforms;android-34' 'build-tools;34.0.0'
+      - name: Preserve the existing signing identity when configured
+        env:
+          MAYA_SIGNING_KEY_B64: ${{ secrets.MAYA_SIGNING_KEY_B64 }}
+        run: |
+          set -euo pipefail
+          if [ -n "$MAYA_SIGNING_KEY_B64" ]; then
+            umask 077
+            printf '%s' "$MAYA_SIGNING_KEY_B64" | base64 --decode > maya-debug.keystore
+            test -s maya-debug.keystore
+          else
+            echo 'No existing signing secret configured; this will use a new runner debug key.'
+          fi
+      - name: Prepare all existing Maya web and native integrations
+        run: python3 scripts/ci-prepare-android.py
+      - name: Build corrected Debug APK and run JVM tests
+        working-directory: android
+        run: |
+          set -euo pipefail
+          ./gradlew assembleDebug testDebugUnitTest --no-daemon 2>&1 | tee "$RUNNER_TEMP/maya-gradle.log"
+      - name: Verify signature, source assets, and exact build commit
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$MAYA_BUILD_COMMIT"
+          git diff --exit-code
+          python3 scripts/ci-verify-apk.py --apk android/app/build/outputs/apk/debug/app-debug.apk --output "$RUNNER_TEMP/maya-apk"
+      - name: Upload the NEW corrected Debug APK
+        id: apk
+        uses: actions/upload-artifact@v4
+        with:
+          name: Maya-debug-${{ env.MAYA_BUILD_COMMIT }}
+          path: ${{ runner.temp }}/maya-apk
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 0
+      - name: Write verified APK download link
+        env:
+          APK_ARTIFACT_URL: ${{ steps.apk.outputs.artifact-url }}
+        run: |
+          set -euo pipefail
+          {
+            printf '### Corrected Maya Debug APK\n\n'
+            printf 'Commit: `%s`\n\n' "$MAYA_BUILD_COMMIT"
+            printf '[Download the corrected APK artifact](%s)\n\n' "$APK_ARTIFACT_URL"
+            printf 'Extract app-debug.apk. BUILD-INFO.json, BUILD-COMMIT.txt, SHA256SUMS, and APK-SIGNATURE.txt provide verification.\n\n'
+            printf 'Browser tests are reported separately and remain failing if their assertions fail. Android phone functionality is not device-verified.\n'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Retain build logs and JVM test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Maya-build-report-${{ env.MAYA_BUILD_COMMIT }}
+          path: |
+            ${{ runner.temp }}/maya-gradle.log
+            android/app/build/test-results
+          if-no-files-found: warn
+          retention-days: 14
