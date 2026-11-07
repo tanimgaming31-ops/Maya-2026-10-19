@@ -1,0 +1,31 @@
+name: Maya local memory and coding safety regression
+
+on:
+  push:
+    branches: [feature/maya-memory-search-code-safety-v1]
+  pull_request:
+    paths:
+      - 'maya-features/agent-suite.js'
+      - 'maya-features/memory-v2.js'
+      - 'tests/memory-search-code-safety.test.mjs'
+      - '.github/workflows/memory-code-safety.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  regression:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Check JavaScript syntax
+        run: |
+          node --input-type=module --check < maya-features/agent-suite.js
+          node --input-type=module --check < maya-features/memory-v2.js
+      - name: Run existing Agent Suite tests
+        run: node tests/agent-suite.test.mjs
+      - name: Verify local memory and code-upload safety
+        run: node tests/memory-search-code-safety.test.mjs
