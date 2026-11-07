@@ -12,6 +12,9 @@ export function parseLifeVoice(raw){
  const head=text.match(/^(?:(?:hey\s+)?maya|মায়া|মায়া)\s*[,،:!\-]?\s+(.+)$/iu);
  if(!head)return null;
  const t=head[1].trim();
+ // Conservative local aliases: read-only battery/status and explicit note commands.
+ if(/^(?:আমার\s+)?(?:ফোনের|ফোনে)\s+(?:কত\s+চার্জ(?:\s+আছে)?|চার্জ\s+কত(?:\s+আছে)?)$/u.test(t)||/^(?:how much charge do i have|show battery percentage)$/iu.test(t))return {kind:'battery'};
+
  if(/^(?:আমার\s+)?(?:ব্যাটারি|চার্জ)\s*(?:কত(?:ো)?(?:\s+আছে)?|কত(?:ো)?\s+পারসেন্ট|দেখাও|স্ট্যাটাস বলো)$/u.test(t)||/^(?:battery|battery status|battery level|how much battery|what is my battery)$/iu.test(t))return {kind:'battery'};
  if(/^(?:সপ্তাহের হিসাব বলো|সাপ্তাহিক সারাংশ বলো|এই সপ্তাহের হিসাব বলো|show weekly summary|weekly summary)$/iu.test(t))return {kind:'weekly'};
  if(/^(?:ফোকাস\s+(?:বন্ধ করো|বন্ধ|থামাও)|stop focus|cancel focus|stop focus timer)$/iu.test(t))return {kind:'stop'};
