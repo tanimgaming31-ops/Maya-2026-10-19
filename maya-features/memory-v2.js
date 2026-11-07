@@ -63,6 +63,35 @@ export function searchMemory(query) {
   );
 }
 
+/**
+ * Ranked, read-only search over the ORIGINAL Maya memory-v2 key.
+ * Does not rewrite, migrate, or transmit any user's stored Memory Pack.
+ * Matches whole words and substrings in Bengali, English and other scripts.
+ */
+export function searchMemoryRanked(query, limit = 12) {
+  const q = String(query ?? "").normalize("NFKC").toLocaleLowerCase().trim().slice(0, 200);
+  if (q.length < 2) return [];
+  const terms = [...new Set(q.split(/[\s,.;:!?।]+/u).filter(t => t.length > 1))].slice(0, 12);
+  if (!terms.length) return [];
+  const maxResults = Number.isInteger(limit) ? Math.max(1, Math.min(25, limit)) : 12;
+  return loadMemory().items
+    .map((item, index) => {
+      if (!item || typeof item.text !== "string" || typeof item.category !== "string") return null;
+      const body = item.text.normalize("NFKC").toLocaleLowerCase();
+      const category = item.category.normalize("NFKC").toLocaleLowerCase();
+      let score = body.includes(q) ? 30 : category.includes(q) ? 15 : 0;
+      for (const term of terms) {
+        if (body.includes(term)) score += 5;
+        if (category.includes(term)) score += 2;
+      }
+      return score > 0 ? {item, score, index} : null;
+    })
+    .filter(Boolean)
+    .sort((a, b) => b.score - a.score || a.index - b.index)
+    .slice(0, maxResults)
+    .map(x => x.item);
+}
+
 export function exportMemory() {
   const blob = new Blob([JSON.stringify(loadMemory(), null, 2)], { type: "application/json" });
   const url = URL.createObjectURL(blob);
