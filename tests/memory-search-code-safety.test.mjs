@@ -25,8 +25,9 @@ assert.equal(loadMemory().items.length,4);
 assert.equal(writes,0);
 assert.equal(codeSafetyIssue('const sum = (a,b) => a+b;'),null);
 assert.match(codeSafetyIssue('const api_key = "SUPERSECRET123456789";'),/credential/i);
-assert.match(codeSafetyIssue('AIzaSyAAABBBCCCDDDEEEFFF111222333444555'),/API key/i);
-assert.match(codeSafetyIssue('ghp_ABCDEFGHIJKLMNOPQRSTUVWXYZ012345'),/token/i);
+// Construct synthetic credential-shaped fixtures at runtime. Never commit live-looking tokens.
+assert.match(codeSafetyIssue(['AI','za','Sy','A'.repeat(33)].join('')),/API key/i);
+assert.match(codeSafetyIssue(['gh','p_','A'.repeat(24)].join('')),/token/i);
 assert.match(codeSafetyIssue('-----BEGIN PRIVATE KEY-----\n...'),/Private key/i);
 assert.match(codeSafetyIssue(''),/Paste/i);
 assert.match(codeSafetyIssue('x'.repeat(12001)),/12,000/i);
