@@ -12,7 +12,7 @@ export function parseLifeVoice(raw){
  const head=text.match(/^(?:(?:hey\s+)?maya|মায়া|মায়া)\s*[,،:!\-]?\s+(.+)$/iu);
  if(!head)return null;
  const t=head[1].trim();
- // Conservative local aliases: read-only battery/status and explicit note commands.
+ // Conservative local aliases: read-only battery status only; no external action.
  if(/^(?:আমার\s+)?(?:ফোনের|ফোনে)\s+(?:কত\s+চার্জ(?:\s+আছে)?|চার্জ\s+কত(?:\s+আছে)?)$/u.test(t)||/^(?:how much charge do i have|show battery percentage)$/iu.test(t))return {kind:'battery'};
 
  if(/^(?:আমার\s+)?(?:ব্যাটারি|চার্জ)\s*(?:কত(?:ো)?(?:\s+আছে)?|কত(?:ো)?\s+পারসেন্ট|দেখাও|স্ট্যাটাস বলো)$/u.test(t)||/^(?:battery|battery status|battery level|how much battery|what is my battery)$/iu.test(t))return {kind:'battery'};
