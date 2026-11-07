@@ -1,0 +1,77 @@
+name: Export original Maya 3D character files
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/export-original-maya-3d.yml'
+permissions:
+  contents: write
+jobs:
+  package-original-3d:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout preserved Maya 3D backup
+        uses: actions/checkout@v4
+        with:
+          ref: backup/maya-before-3d-vendor-removal-2026-10-31
+          path: backup
+          persist-credentials: false
+      - name: Package original 3D model, animation source and notices
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s backup/maya.vrm
+          test -s backup/character-model-sheet-original.png
+          test -s backup/index.html
+          test -s backup/vendor/three/three.module.min.js
+          test -s backup/vendor/three-vrm.module.min.js
+          mkdir -p package/Maya-Original-3D
+          cp backup/maya.vrm backup/character-model-sheet-original.png package/Maya-Original-3D/
+          cp backup/index.html package/Maya-Original-3D/Original-3D-index.html
+          cp -r backup/vendor package/Maya-Original-3D/
+          cp backup/LICENSE backup/THIRD_PARTY_NOTICES.md package/Maya-Original-3D/
+          cat > package/Maya-Original-3D/README.txt <<'TXT'
+          MAYA ORIGINAL 3D CHARACTER BACKUP
+          From: tanimgaming31-ops/Maya-2026-10-19
+          Source branch: backup/maya-before-3d-vendor-removal-2026-10-31
+          Model originally uploaded: October 20, 2026.
+          Original character image uploaded: October 19, 2026.
+
+          Files:
+          maya.vrm : original rigged 3D character model
+          character-model-sheet-original.png : original character reference image
+          Original-3D-index.html : earlier Maya page with 3D rendering/animation controls
+          vendor/ : bundled Three.js and VRM renderer used by that version
+
+          RESTORATION NOTE
+          This is a source backup, not an Android APK or a standalone 3D viewer.
+          Using the 3D code may require Maya's original app files, permissions,
+          a compatible browser/WebGL engine and separately verified testing.
+          The 3D model's ownership and redistribution rights have NOT been verified.
+          Keep the bundled licenses and THIRD_PARTY_NOTICES.md.
+          TXT
+          (cd package && zip -q -r Maya-Original-3D-Backup.zip Maya-Original-3D)
+          mv package/Maya-Original-3D-Backup.zip .
+          sha256sum Maya-Original-3D-Backup.zip > Maya-Original-3D-Backup.zip.sha256
+          unzip -tqq Maya-Original-3D-Backup.zip
+          ls -lh Maya-Original-3D-Backup.zip
+      - name: Upload ZIP as GitHub Actions artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Maya-Original-3D-Backup
+          path: |
+            Maya-Original-3D-Backup.zip
+            Maya-Original-3D-Backup.zip.sha256
+          retention-days: 30
+      - name: Publish downloadable backup release (not latest APK)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAG="maya-original-3d-backup-2026-10-31"
+          if gh release view "$TAG" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$TAG" Maya-Original-3D-Backup.zip Maya-Original-3D-Backup.zip.sha256 -R "$GITHUB_REPOSITORY" --clobber
+          else
+            gh release create "$TAG" Maya-Original-3D-Backup.zip Maya-Original-3D-Backup.zip.sha256 -R "$GITHUB_REPOSITORY" --title "Maya Original 3D Character Backup" --notes "Original Maya 3D VRM model, October 19 character image, previous 3D animation source, vendor renderer and original third-party notices. This is an archive, not an APK. Rights to maya.vrm have not been independently verified." --latest=false
+          fi
