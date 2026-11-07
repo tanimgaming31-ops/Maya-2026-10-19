@@ -79,7 +79,7 @@ export function searchMemoryRanked(query, limit = 12) {
       if (!item || typeof item.text !== "string" || typeof item.category !== "string") return null;
       const body = item.text.normalize("NFKC").toLocaleLowerCase();
       const category = item.category.normalize("NFKC").toLocaleLowerCase();
-      let score = body.includes(q) ? 30 : category.includes(q) ? 15 : 0;
+      let score = body === q ? 60 : body.includes(q) ? 30 : category.includes(q) ? 15 : 0;
       for (const term of terms) {
         if (body.includes(term)) score += 5;
         if (category.includes(term)) score += 2;
