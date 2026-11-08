@@ -339,7 +339,20 @@ jobs:
           else
             printf '\nnetworkTimeout=120000\n' >> "$wrapper"
           fi
-          ./gradlew assembleDebug --no-daemon
+          # Official distribution endpoints currently redirect to GitHub Release
+          # downloads returning HTTP 504. Use two independent archive mirrors.
+          # Pin official Gradle 8.2.1 SHA-256 to reject modified/corrupt mirrors.
+          sed -i 's#https\\://downloads.gradle.org/distributions/gradle-8.2.1-bin.zip#https\\://repo.huaweicloud.com/gradle/gradle-8.2.1-bin.zip#g' "$wrapper"
+          if grep -q '^distributionSha256Sum=' "$wrapper"; then
+            sed -i 's/^distributionSha256Sum=.*/distributionSha256Sum=03ec176d388f2aa99defcadc3ac6adf8dd2bce5145a129659537c0874dea5ad1/' "$wrapper"
+          else
+            printf '\n%s\n' 'distributionSha256Sum=03ec176d388f2aa99defcadc3ac6adf8dd2bce5145a129659537c0874dea5ad1' >> "$wrapper"
+          fi
+          if ! ./gradlew assembleDebug --no-daemon; then
+            echo 'First checksum-verified Gradle mirror did not succeed; retrying another verified mirror.'
+            sed -i 's#repo.huaweicloud.com/gradle/gradle-8.2.1-bin.zip#mirrors.aliyun.com/gradle/distributions/v8.2.1/gradle-8.2.1-bin.zip#g' "$wrapper"
+            ./gradlew assembleDebug --no-daemon
+          fi
 
       - name: Publish matching PWA icons to GitHub Pages source
         run: |
