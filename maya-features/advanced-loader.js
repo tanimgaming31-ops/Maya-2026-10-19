@@ -1,6 +1,5 @@
 /* Maya advanced entry point; keeps controls inside Settings, not over the voice call. */
 import './offline-commands.js';
-import './private-vault.js';
 import './screenshot.js';
 import './voice-screenshot.js';
 import './life-suite.js';
@@ -29,8 +28,6 @@ import './android-controls-v167.js';
 import './smart-vision-v169.js';
 // V172 adds real Voice dispatch for captions, local home, router guides, original 2D avatar and study quiz.
 import './voice-first-v172.js';
-// V174 opt-in owner verification + private, visible capture (never background face surveillance).
-import './owner-guard-v174.js';
 // Native Maya-only floating companion and hands-free shortcuts (Jerry-style capability, not Jerry app).
 import './native-handsfree-v177.js';
 // PDF V25: full 54-feature / 444-subfeature searchable catalog; no native privilege changes.
