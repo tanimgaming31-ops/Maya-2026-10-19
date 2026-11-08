@@ -324,7 +324,19 @@ jobs:
 
       - name: Build APK
         working-directory: android
-        run: ./gradlew assembleDebug --no-daemon
+        run: |
+          set -euo pipefail
+          # GitHub's generated wrapper defaults to a 10s download timeout.
+          # Use the smaller binary distribution; tolerate slow Gradle CDN reads.
+          wrapper=gradle/wrapper/gradle-wrapper.properties
+          test -f "$wrapper"
+          sed -i 's/-all\\.zip/-bin.zip/g' "$wrapper"
+          if grep -q '^networkTimeout=' "$wrapper"; then
+            sed -i 's/^networkTimeout=.*/networkTimeout=120000/' "$wrapper"
+          else
+            printf '\nnetworkTimeout=120000\n' >> "$wrapper"
+          fi
+          ./gradlew assembleDebug --no-daemon
 
       - name: Publish matching PWA icons to GitHub Pages source
         run: |
