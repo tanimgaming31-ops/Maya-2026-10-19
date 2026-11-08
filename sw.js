@@ -1,4 +1,4 @@
-const V = 'maya-v25-feature-catalog-20261031';
+const V = 'maya-security-features-removed-20261108';
 // App shell is network-first (always fresh); icons are cache-first; removed 3D vendor files must not remain in active cache.
 const SHELL = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png', './maya-features/advanced-loader.js', './maya-features/v25-54-registry.js', './maya-features/v25-54-hub.js'];
 const STATIC = /\/icon-\d+\.png$/;
