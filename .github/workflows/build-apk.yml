@@ -331,6 +331,9 @@ jobs:
           wrapper=gradle/wrapper/gradle-wrapper.properties
           test -f "$wrapper"
           sed -i 's/-all[.]zip/-bin.zip/g' "$wrapper"
+          # Download directly from Gradle's CDN; services.gradle.org redirects
+          # to GitHub Releases, which is currently returning HTTP 504.
+          sed -i 's#services.gradle.org/distributions#downloads.gradle.org/distributions#g' "$wrapper"
           if grep -q '^networkTimeout=' "$wrapper"; then
             sed -i 's/^networkTimeout=.*/networkTimeout=120000/' "$wrapper"
           else
