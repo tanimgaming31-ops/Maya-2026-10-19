@@ -330,7 +330,7 @@ jobs:
           # Use the smaller binary distribution; tolerate slow Gradle CDN reads.
           wrapper=gradle/wrapper/gradle-wrapper.properties
           test -f "$wrapper"
-          sed -i 's/-all\\.zip/-bin.zip/g' "$wrapper"
+          sed -i 's/-all[.]zip/-bin.zip/g' "$wrapper"
           if grep -q '^networkTimeout=' "$wrapper"; then
             sed -i 's/^networkTimeout=.*/networkTimeout=120000/' "$wrapper"
           else
