@@ -91,11 +91,6 @@ jobs:
           test -s maya-features/voice-first-v172.js
           test -s native-home/MayaHomeControl.java
           test -s scripts/install-home-voice.py
-          test -s maya-features/owner-guard-v174.js
-          test -s native-owner/MayaOwnerGuard.java
-          test -s scripts/install-owner-guard.py
-          test -s tests/owner-guard-v174.test.mjs
-          test -s tests/owner-guard-native-check.py
           test -s tests/voice-first-v172.test.mjs
           test -s tests/home-voice-native-check.py
           test -s tests/smart-vision-v169.test.mjs
@@ -128,7 +123,6 @@ jobs:
           test -s scripts/install-life-native.py
           test -s tests/life-native-check.py
           test -s tests/life-suite.test.mjs
-          test -s maya-features/private-vault.js
           test -s maya-features/screenshot.js
           test -s maya-features/voice-screenshot.js
           test -s maya-features/auto-reply.js
@@ -144,7 +138,6 @@ jobs:
           test -s scripts/ensure-launcher-query.py
           test -s tests/voice-screenshot.test.cjs
           test -s tests/native-screenshot-check.py
-          test -s tests/private-vault.test.mjs
           test -s maya-features/offline-commands.js
           test -s maya-features/advanced-panel.html
           node --input-type=module --check < maya-v18-runtime.js
@@ -157,7 +150,6 @@ jobs:
           Path('/tmp/maya-advanced-panel.mjs').write_text(m.group(1),encoding='utf-8')
           PY_ADVANCED_TEST
           node --input-type=module --check < /tmp/maya-advanced-panel.mjs
-          node tests/private-vault.test.mjs
           node tests/life-suite.test.mjs
           node tests/life-voice.test.mjs
           node tests/smart-hub.test.mjs
@@ -183,10 +175,9 @@ jobs:
           python3 tests/smart-vision-native-check.py
           node tests/voice-first-v172.test.mjs
           python3 tests/home-voice-native-check.py
-          node tests/owner-guard-v174.test.mjs
           node tests/native-handsfree-v177.test.mjs
+          node tests/security-retirement.test.mjs
           python3 tests/maya-native-floating-check.py
-          python3 tests/owner-guard-native-check.py
           node tests/auto-reply.test.mjs
           python3 tests/native-screenshot-check.py
           node tests/v25-54-hub.test.mjs
@@ -214,7 +205,6 @@ jobs:
           w = re.sub(r"const V = '[^']+';", "const V = 'maya-v25-feature-catalog-20261031';", w, count=1)
           if "'./maya-v18-runtime.js'" not in w:
               if 'const SHELL = [' not in w: raise SystemExit('Unexpected sw.js shell declaration')
-              w = w.replace('const SHELL = [', "const SHELL = ['./maya-v18-runtime.js', './maya-features/feature-registry.js', './maya-features/android-bridge.js', './maya-features/memory-v2.js', './maya-features/productivity.js', './maya-features/daily-briefing.js', './maya-features/advanced-loader.js', './maya-features/agent-suite.js', './maya-features/agent-voice.js', './maya-features/agent-voice-bridge.js', './maya-features/offline-commands.js', './maya-features/advanced-panel.html', './maya-features/private-vault.js', './maya-features/screenshot.js', './maya-features/voice-screenshot.js', './maya-features/life-suite.js', './maya-features/life-voice.js', './maya-features/smart-hub.js', './maya-features/app-launcher.js', ",1)
           if "'./maya-features/v54-suite.js'" not in w:
               w = w.replace("'./maya-features/agent-suite.js', ", "'./maya-features/agent-suite.js', './maya-features/v54-voice.js', './maya-features/v54-suite.js', './maya-features/v54-voice-bridge.js', ", 1)
           if "'./maya-features/birthday-core.js'" not in w:
@@ -243,7 +233,6 @@ jobs:
           test -s www/maya-features/local-tools.js
           test -s www/maya-features/smart-vision-v169.js
           test -s www/maya-features/voice-first-v172.js
-          test -s www/maya-features/owner-guard-v174.js
           test -s www/maya-features/v54-voice.js
           test -s www/maya-features/v54-voice-bridge.js
           test -s www/maya-features/productivity.js
@@ -286,7 +275,6 @@ jobs:
           python3 scripts/install-android-controls.py
           python3 scripts/install-smart-vision.py
           python3 scripts/install-home-voice.py
-          python3 scripts/install-owner-guard.py
           python3 scripts/install-maya-floating.py
           grep -Fq 'window.updateViewLayout(root,params)' android/app/src/main/java/com/tanim/maya/MayaV52Overlay.java
           grep -Fq 'public String autoReply(String action, String json)' android/app/src/main/java/com/tanim/maya/MayaBridge.java
@@ -303,9 +291,7 @@ jobs:
           test -s android/app/src/main/java/com/tanim/maya/MayaAndroidControls.java
           test -s android/app/src/main/java/com/tanim/maya/MayaDocumentPdf.java
           test -s android/app/src/main/java/com/tanim/maya/MayaHomeControl.java
-          test -s android/app/src/main/java/com/tanim/maya/MayaOwnerGuard.java
           grep -Fq 'public String ownerGuard(String action, String json)' android/app/src/main/java/com/tanim/maya/MayaBridge.java
-          grep -Fq 'android.permission.USE_BIOMETRIC' android/app/src/main/AndroidManifest.xml
           grep -Fq 'public String homeControl(String action, String json)' android/app/src/main/java/com/tanim/maya/MayaBridge.java
           grep -Fq 'public String documentPdf(String action, String json)' android/app/src/main/java/com/tanim/maya/MayaBridge.java
           grep -Fq 'public String androidControls(String action, String json)' android/app/src/main/java/com/tanim/maya/MayaBridge.java
