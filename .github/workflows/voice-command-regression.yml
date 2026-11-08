@@ -1,0 +1,31 @@
+name: Maya voice command regression
+
+on:
+  pull_request:
+    paths:
+      - 'maya-features/life-voice.js'
+      - 'tests/life-voice.test.mjs'
+      - '.github/workflows/voice-command-regression.yml'
+  push:
+    branches:
+      - 'feature/maya-bilingual-command-reliability'
+    paths:
+      - 'maya-features/life-voice.js'
+      - 'tests/life-voice.test.mjs'
+      - '.github/workflows/voice-command-regression.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  test-voice:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Verify voice parser source syntax
+        run: node --input-type=module --check < maya-features/life-voice.js
+      - name: Run existing and new bilingual voice cases
+        run: node tests/life-voice.test.mjs
