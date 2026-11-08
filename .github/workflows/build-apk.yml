@@ -202,7 +202,7 @@ jobs:
           html.write_text(s, encoding='utf-8')
           sw = Path('www/sw.js')
           w = sw.read_text(encoding='utf-8')
-          w = re.sub(r"const V = '[^']+';", "const V = 'maya-v25-feature-catalog-20261031';", w, count=1)
+          w = re.sub(r"const V = '[^']+';", "const V = 'maya-security-features-removed-20261108';", w, count=1)
           if "'./maya-v18-runtime.js'" not in w:
               if 'const SHELL = [' not in w: raise SystemExit('Unexpected sw.js shell declaration')
           if "'./maya-features/v54-suite.js'" not in w:
@@ -291,7 +291,6 @@ jobs:
           test -s android/app/src/main/java/com/tanim/maya/MayaAndroidControls.java
           test -s android/app/src/main/java/com/tanim/maya/MayaDocumentPdf.java
           test -s android/app/src/main/java/com/tanim/maya/MayaHomeControl.java
-          grep -Fq 'public String ownerGuard(String action, String json)' android/app/src/main/java/com/tanim/maya/MayaBridge.java
           grep -Fq 'public String homeControl(String action, String json)' android/app/src/main/java/com/tanim/maya/MayaBridge.java
           grep -Fq 'public String documentPdf(String action, String json)' android/app/src/main/java/com/tanim/maya/MayaBridge.java
           grep -Fq 'public String androidControls(String action, String json)' android/app/src/main/java/com/tanim/maya/MayaBridge.java
