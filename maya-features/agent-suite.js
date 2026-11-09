@@ -1,6 +1,7 @@
 /* Maya Agent Suite V29: eight user-initiated capabilities inside the original app.
    No imported third-party IDE, unattended browser automation, or arbitrary Android access. */
 import { openNamedApp } from './app-launcher.js';
+import { searchMemoryRanked } from './memory-v2.js';
 
 const HISTORY_KEY='maya.agent.history.v1';
 const API='https://generativelanguage.googleapis.com/v1beta';
@@ -30,6 +31,24 @@ export function validatePlan(input){
   });
   return {goal,steps};
 }
+/**
+ * Refuse to upload code with likely credentials. False positives are preferable
+ * to silently leaking an API key; user can remove secrets and retry.
+ * This scans only explicit pasted text, never the phone's files or clipboard.
+ */
+export function codeSafetyIssue(code) {
+  const value=String(code??'');
+  if (!value.trim()) return 'Paste some code first.';
+  if (value.length>12000) return 'Code exceeds 12,000 characters.';
+  if (/-----BEGIN (?:RSA |EC |OPENSSH |DSA )?PRIVATE KEY-----/i.test(value)) return 'Private key detected. Remove it before upload.';
+  if (/\bAIza[\w-]{25,}\b/.test(value)) return 'Google API key detected. Remove it before upload.';
+  if (/\b(?:gh[pousr]_[A-Za-z0-9_]{20,}|github_pat_[A-Za-z0-9_]{20,}|AKIA[0-9A-Z]{16}|xox[baprs]-[A-Za-z0-9-]{15,})\b/.test(value)) return 'Access token detected. Remove it before upload.';
+  if (/\b(?:password|passwd|api[_-]?key|client[_-]?secret|access[_-]?token|auth[_-]?token)\s*[:=]\s*["'`]?([^\s"'\x60,;}{]{8,})/iu.test(value)) {
+    return 'Possible credential assignment detected. Replace real values with placeholders.';
+  }
+  return null;
+}
+
 export function researchQueries(topic){
  const q=clean(topic,160);if(q.length<3)throw Error('Enter a more specific topic.');
  return [q,q+' official documentation or primary source',q+' latest limitations and evidence'];
@@ -174,6 +193,10 @@ function panel(){
  <button class="btn" id="agentCodeReview">Review code with Gemini</button>
  <p class="note">Suggests code only. Does not execute scripts or change your GitHub files.</p>
  <h3>8 · Task Dashboard</h3><button class="btn" id="agentClearHistory">Clear Agent task history</button>
+ <h4>Read-only Personal Memory Search</h4>
+ <input class="inp wide" id="agentMemoryQuery" maxlength="200" placeholder="Search saved Maya memories locally">
+ <button class="btn" id="agentMemorySearch">Find saved memories</button>
+ <p class="note">Searches existing Maya Memory v2 only, on this phone. Nothing is uploaded, edited, deleted or merged. Other legacy Memory Packs remain separate.</p>
  <div id="agentHistory"></div><p class="note">The most recent 25 task statuses are stored locally (not encrypted). Clear them on shared phones.</p>
  <h3>Agent result</h3><div id="agentStatus" role="status" aria-live="polite" class="note">Ready.</div>
  <pre class="msg" id="agentOutput" style="white-space:pre-wrap;overflow-wrap:anywhere;max-height:350px;overflow-y:auto"></pre>
@@ -247,12 +270,19 @@ function panel(){
  });
  $('agentCodeReview').onclick=()=>void work('Coding Assistant',async signal=>{
   const code=$('agentCode').value;if(!code.trim())throw Error('Paste code first.');
-  if(/AIza[\w-]{25,}|-----BEGIN (?:RSA |EC )?PRIVATE KEY-----/i.test(code))throw Error('Remove keys and private secrets before sending code.');
+  const issue=codeSafetyIssue(code);if(issue)throw Error(issue);
   if(!confirm('Send the pasted code and instruction to Google Gemini for review?'))throw new DOMException('Cancelled','AbortError');
   const task=clean($('agentCodeTask').value,260)||'Find bugs and explain fixes.';
   const r=await gemini([{text:'Review this code as text, do not execute it. State uncertainties, explain and propose a correction. Task: '+task+'\nCODE:\n'+code}],{signal});
   const answer=plain(r);if(!answer)throw Error('No code review returned.');output(answer);
  });
+ $('agentMemorySearch').onclick=()=>{
+  const query=$('agentMemoryQuery').value.trim();
+  if(query.length<2)return show('Enter at least two characters to search memory.',true);
+  const found=searchMemoryRanked(query,12);
+  output(found.length ? found.map((item,i)=>(i+1)+'. ['+item.category+'] '+item.text).join('\n\n') : 'No matching Memory v2 entries on this phone.');
+  show(found.length+' local memory matches. No network request made.');
+ };
  $('agentClearHistory').onclick=()=>{if(confirm('Delete only Agent Suite task statuses from this device?')){localStorage.removeItem(HISTORY_KEY);refreshHistory();show('Agent task history cleared. Original Maya memories are untouched.');}};
  refreshHistory();
 }
