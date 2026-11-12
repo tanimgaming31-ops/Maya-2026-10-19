@@ -210,7 +210,17 @@ for(const name of ['Binance','CapCut','Moto Camera','My Fitness App','ক্য�
  const r=api.validateAction({action:'OPEN_APP',app:name},Date.now(),new Set());
  t('OPEN_APP accepts native installed app label: '+name,r.ok===true&&r.p.app===name);
 }
-for(const bad of ['','A','https://bad.example/','com.example.app','intent://app','bad\napp', 'X'.repeat(101)]){
+for(const [input, expected] of [
+ ['  Moto   Camera  ', 'Moto Camera'],
+ ['Moto\tCamera', 'Moto Camera'],
+ ['Ｍｏｔｏ Camera', 'Moto Camera'],
+ ['  WhatsApp  ', 'whatsapp']
+]){
+ const r=api.validateAction({action:'OPEN_APP',app:input},Date.now(),new Set());
+ t('OPEN_APP preserves safe label normalization: '+JSON.stringify(input),r.ok===true&&r.p.app===expected);
+}
+for(const bad of ['','A','https://bad.example/','com.example.app','intent://app',
+ 'bad\napp','bad\rapp','bad\r\napp','\nWhatsApp','WhatsApp\r','Whats\nApp', 'X'.repeat(101)]){
  const r=api.validateAction({action:'OPEN_APP',app:bad},Date.now(),new Set());
  t('OPEN_APP rejects unsafe/unusable name: '+JSON.stringify(bad),r.ok===false);
 }
